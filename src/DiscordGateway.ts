@@ -1,23 +1,24 @@
-import EventEmitter from "./EventEmitter";
+import EventEmitter from "./EventEmitter.ts";
 
-import { writable } from "svelte/store";
-import { Deferred } from "./utils";
+import { writable } from "npm:svelte/store";
+import { Deferred } from "./utils.ts";
+import type { JSON } from "./DiscordXHR.ts";
 
 interface GatewayEvent {
-	op?: number;
+	op: number;
 	d?: any;
 	s?: number;
 	t?: string;
 }
 
 class GatewayBase extends EventEmitter {
-	token?: string = null;
-	ws?: WebSocket = null;
-	sequence_num?: number = null;
-	authenticated = false;
+	private token?: string = null;
+	private ws?: WebSocket = null;
+	private sequence_num?: number = null;
+	private authenticated = false;
 	readonly streamURL = "wss://gateway.discord.gg/?v=9&encoding=json";
 
-	constructor(public _debug: boolean = false) {
+	constructor(public _debug = false) {
 		super();
 	}
 
@@ -29,23 +30,22 @@ class GatewayBase extends EventEmitter {
 	login(token: string) {
 		this.token = token;
 	}
-	send(data: object) {
+	send(data: JSON) {
 		this.debug("send:", data);
 		this.ws.send(JSON.stringify(data));
 	}
-	handlePacket(message: MessageEvent) {
-		var packet: GatewayEvent = JSON.parse(message.data);
-
+	handlePacket(packet: GatewayEvent) {
 		this.debug("Handling packet with OP ", packet.op);
 
-		var callbacks = {
+		const callbacks = {
 			0: this.packetDispacth,
 			9: this.packetInvalidSess,
 			10: this.packetHello,
 			11: this.packetAck,
 		};
 
-		if (packet.op in callbacks) callbacks[packet.op].apply(this, [packet]);
+		// @ts-ignore: it's going to work
+		if (packet.op in callbacks) callbacks[packet.op].call(this, packet);
 		else this.debug("OP " + packet.op + "not found!");
 	}
 	packetDispacth(packet: GatewayEvent) {
@@ -59,7 +59,7 @@ class GatewayBase extends EventEmitter {
 	}
 
 	packetHello(packet: GatewayEvent) {
-		var ws = this.ws;
+		const ws = this.ws;
 
 		this.debug("Sending initial heartbeat...");
 		this.send({
@@ -67,7 +67,7 @@ class GatewayBase extends EventEmitter {
 			d: this.sequence_num,
 		});
 
-		var interval = setInterval(() => {
+		const interval = setInterval(() => {
 			if (ws !== this.ws) return clearInterval(interval);
 			this.debug("Sending heartbeat...");
 			this.send({
@@ -86,11 +86,16 @@ class GatewayBase extends EventEmitter {
 			d: {
 				status: "online",
 				token: this.token,
-				intents: 0b11111111111111111,
+				// intents: 0b11111111111111111,
+				// properties: {
+				// 	$os: "Android",
+				// 	$browser: "Discord Android",
+				// 	$device: "phone",
+				// },
 				properties: {
-					$os: "Android",
-					$browser: "Discord Android",
-					$device: "phone",
+					browser: "Discord Android",
+					device: "sveltecord, discord4kaios",
+					os: "Android",
 				},
 			},
 		});
@@ -107,16 +112,17 @@ class GatewayBase extends EventEmitter {
 		this.debug("Connecting to gateway...");
 		this.close();
 
-		const ws = new WebSocket(this.streamURL);
+		const ws = (this.ws = new WebSocket(this.streamURL));
 
-		this.ws = ws;
+		ws.addEventListener("message", ({ data }) => {
+			this.handlePacket(JSON.parse(data));
+		});
 
-		ws.addEventListener("message", (message) => this.handlePacket(message));
 		ws.addEventListener("open", () => this.debug("Sending Identity [OP 2]..."));
-		ws.addEventListener("close", (evt) => {
+		ws.addEventListener("close", () => {
 			this.ws = null;
 			console.error("Discord gateway closed!");
-			this.emit("close", evt);
+			this.emit("close");
 		});
 	}
 }
@@ -133,7 +139,7 @@ function startWorker() {
 	self.postMessage("worker:ready");
 }
 
-console.log(`var ${EventEmitter.name}=${EventEmitter.toString()};var ${GatewayBase.name}=${GatewayBase.toString()};(${startWorker.toString()})()`);
+// console.log(`var ${EventEmitter.name}=${EventEmitter.toString()};var ${GatewayBase.name}=${GatewayBase.toString()};(${startWorker.toString()})()`);
 
 type RunCommands = "close" | "send" | "login" | "init";
 
@@ -154,15 +160,17 @@ class Gateway extends EventEmitter {
 	private ready = Promise.resolve();
 	constructor({ debug = false, worker = true }) {
 		super();
-		if (worker && typeof Worker !== "undefined") {
+		if (worker && typeof Deno === "undefined" && typeof Worker !== "undefined") {
 			this.backend = this.setupWorker(debug);
 		} else this.backend = this.setupMainThread(debug);
+
 		this.backend.on("*", (evt: string, ...data: any[]) => {
 			this.emit(evt, ...data);
 		});
 	}
 	async run(command: RunCommands, ...args: any[]) {
 		await this.ready;
+		// @ts-ignore: bruh
 		if (command in this.backend) this.backend[command](...args);
 		else if ("run" in this.backend) this.backend.run(command, ...args);
 	}
@@ -204,13 +212,20 @@ export default class DiscordGateway extends Gateway {
 	read_state = writable(null);
 	user_guild_settings = writable(null);
 
+	private token?: string = null;
+
 	constructor({ debug = false, worker = true }) {
 		super({ debug, worker });
+		this.on("t:ready", (data) => {
+			let { user_settings, guilds, private_channels, read_state, user_guild_settings } = data;
+			console.log({ user_settings, private_channels, guilds, read_state, user_guild_settings });
+		});
 	}
 
 	async login(token: string) {
 		await this.run("login", token);
 		await this.run("init");
+		this.token = token;
 	}
 
 	async send(packet: any) {
