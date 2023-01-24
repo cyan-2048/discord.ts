@@ -1,22 +1,24 @@
-import EventEmitter from "./EventEmitter.ts";
+import EventEmitter from "./EventEmitter";
 
-import { writable } from "npm:svelte/store";
-import { Deferred } from "./utils.ts";
-import type { JSON } from "./DiscordXHR.ts";
+// import { writable } from "svelte/store";
+import { Deferred } from "./utils";
+import { pako } from "./pako.js";
 
 interface GatewayEvent {
 	op: number;
 	d?: any;
 	s?: number;
-	t?: string;
+	t: string;
 }
 
 class GatewayBase extends EventEmitter {
-	private token?: string = null;
-	private ws?: WebSocket = null;
-	private sequence_num?: number = null;
+	private token?: string | null = null;
+	private ws?: WebSocket | null = null;
+	private sequence_num?: number | null = null;
 	private authenticated = false;
-	readonly streamURL = "wss://gateway.discord.gg/?v=9&encoding=json";
+	readonly streamURL = "wss://gateway.discord.gg/?v=9&encoding=json&compress=zlib-stream";
+	private pako = pako() as any;
+	private _inflate: any;
 
 	constructor(public _debug = false) {
 		super();
@@ -30,32 +32,31 @@ class GatewayBase extends EventEmitter {
 	login(token: string) {
 		this.token = token;
 	}
-	send(data: JSON) {
+	send(data: object) {
 		this.debug("send:", data);
-		this.ws.send(JSON.stringify(data));
+		this.ws?.send(JSON.stringify(data));
 	}
 	handlePacket(packet: GatewayEvent) {
 		this.debug("Handling packet with OP ", packet.op);
 
 		const callbacks = {
-			0: this.packetDispacth,
+			0: this.packetDispatch,
 			9: this.packetInvalidSess,
 			10: this.packetHello,
 			11: this.packetAck,
 		};
 
-		// @ts-ignore: it's going to work
 		if (packet.op in callbacks) callbacks[packet.op].call(this, packet);
 		else this.debug("OP " + packet.op + "not found!");
 	}
-	packetDispacth(packet: GatewayEvent) {
+	packetDispatch(packet: GatewayEvent) {
 		this.sequence_num = packet.s;
 		this.debug("dispatch:", packet);
 		this.emit("t:" + packet.t.toLowerCase(), packet.d);
 	}
 	packetInvalidSess(packet: GatewayEvent) {
 		this.debug("sess inv:", packet);
-		this.ws.close();
+		this.close();
 	}
 
 	packetHello(packet: GatewayEvent) {
@@ -104,6 +105,12 @@ class GatewayBase extends EventEmitter {
 	close() {
 		this.ws?.close();
 		this.ws = null;
+		if (this._inflate) {
+			// @ts-ignore
+			this._inflate.chunks = [];
+			this._inflate.onEnd = () => {};
+			this._inflate = null;
+		}
 	}
 
 	init() {
@@ -112,15 +119,36 @@ class GatewayBase extends EventEmitter {
 		this.debug("Connecting to gateway...");
 		this.close();
 
-		const ws = (this.ws = new WebSocket(this.streamURL));
+		const pako = this.pako;
 
-		ws.addEventListener("message", ({ data }) => {
-			this.handlePacket(JSON.parse(data));
+		this._inflate = new pako.Inflate({ chunkSize: 65536, to: "string" });
+		const ws = (this.ws = new WebSocket(this.streamURL));
+		ws.binaryType = "arraybuffer";
+
+		this._inflate.onEnd = (e: number) => {
+			// @ts-ignore
+			if (e !== pako.Z_OK) throw new Error("zlib error, ".concat(e, ", ").concat(this._inflate.strm.msg));
+
+			// @ts-ignore
+			const chunks = this._inflate?.chunks as string[];
+
+			const result = chunks?.join("");
+			result && this.handlePacket(JSON.parse(result));
+			chunks.length = 0;
+		};
+
+		ws.addEventListener("message", ({ data }: MessageEvent<ArrayBuffer>) => {
+			if (!this._inflate) return;
+			const r = new DataView(data as ArrayBuffer),
+				o = r.byteLength >= 4 && 65535 === r.getUint32(r.byteLength - 4, false);
+			// @ts-ignore
+			this._inflate.push(data, !!o && pako.Z_SYNC_FLUSH);
 		});
 
 		ws.addEventListener("open", () => this.debug("Sending Identity [OP 2]..."));
 		ws.addEventListener("close", () => {
 			this.ws = null;
+			this.close();
 			console.error("Discord gateway closed!");
 			this.emit("close");
 		});
@@ -156,11 +184,11 @@ class GatewayWorker extends EventEmitter {
 }
 
 class Gateway extends EventEmitter {
-	private backend?: GatewayWorker | GatewayBase = null;
+	private backend: GatewayWorker | GatewayBase;
 	private ready = Promise.resolve();
 	constructor({ debug = false, worker = true }) {
 		super();
-		if (worker && typeof Deno === "undefined" && typeof Worker !== "undefined") {
+		if (worker && typeof Worker !== "undefined") {
 			this.backend = this.setupWorker(debug);
 		} else this.backend = this.setupMainThread(debug);
 
@@ -170,8 +198,7 @@ class Gateway extends EventEmitter {
 	}
 	async run(command: RunCommands, ...args: any[]) {
 		await this.ready;
-		// @ts-ignore: bruh
-		if (command in this.backend) this.backend[command](...args);
+		if (this.backend[command]) this.backend[command](...args);
 		else if ("run" in this.backend) this.backend.run(command, ...args);
 	}
 	setupMainThread(debug: boolean) {
@@ -181,9 +208,15 @@ class Gateway extends EventEmitter {
 		const deferred = new Deferred<void>();
 		this.ready = deferred.promise;
 
+		const importFunc = (func: Function) => `var ${func.name}=${func.toString()};`;
+
+		const toEval = `${[pako, EventEmitter, GatewayBase].map(importFunc).join("\n")}(${startWorker.toString()})()`;
+
+		console.log(toEval);
+
 		const worker = new Worker(
 			URL.createObjectURL(
-				new Blob([`var ${EventEmitter.name}=${EventEmitter.toString()};` + `var ${GatewayBase.name}=${GatewayBase.toString()};` + `(${startWorker.toString()})()`], {
+				new Blob([toEval], {
 					type: "text/javascript",
 				})
 			)
@@ -206,19 +239,19 @@ class Gateway extends EventEmitter {
 }
 
 export default class DiscordGateway extends Gateway {
-	user_settings = writable(null);
-	guilds = writable(null);
-	private_channels = writable(null);
-	read_state = writable(null);
-	user_guild_settings = writable(null);
+	// user_settings = writable(null);
+	// guilds = writable(null);
+	// private_channels = writable(null);
+	// read_state = writable(null);
+	// user_guild_settings = writable(null);
 
-	private token?: string = null;
+	private token: string | null = null;
 
 	constructor({ debug = false, worker = true }) {
 		super({ debug, worker });
 		this.on("t:ready", (data) => {
-			let { user_settings, guilds, private_channels, read_state, user_guild_settings } = data;
-			console.log({ user_settings, private_channels, guilds, read_state, user_guild_settings });
+			const { user_settings, guilds, private_channels, read_state, user_guild_settings } = data;
+			//console.log({ user_settings, private_channels, guilds, read_state, user_guild_settings });
 		});
 	}
 

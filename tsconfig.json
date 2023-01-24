@@ -1,0 +1,19 @@
+{
+	"compilerOptions": {
+		"allowJs": true,
+		"lib": ["ESNext", "DOM"],
+		"target": "ES6",
+		"strict": true,
+		"moduleResolution": "node",
+		"strictNullChecks": true,
+		"noImplicitAny": false,
+		"esModuleInterop": true,
+		"types": ["node", "web"],
+		"outDir": "./dist/"
+	},
+	"ts-node": {
+		"esm": true
+	},
+	"include": ["./src/**/*.ts", "./src/**/*.tsx"],
+	"exclude": ["node_modules", "build", "dist", "./src/**/*.js", "./src/**/*.jsx"]
+}

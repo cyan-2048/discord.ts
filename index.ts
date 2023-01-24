@@ -1,17 +1,17 @@
-import DiscordGateway from "./src/DiscordGateway.ts";
-import DiscordXHR from "./src/DiscordXHR.ts";
-import MFA from "./src/MFA.ts";
+import DiscordGateway from "./src/DiscordGateway";
+import DiscordXHR from "./src/DiscordXHR";
+import MFA from "./src/MFA";
 
-class Discord {
+export default class Discord {
 	gateway: DiscordGateway;
-	xhr: DiscordXHR["xhr"];
+	xhr?: DiscordXHR["xhr"];
 
 	constructor(debug = false) {
 		this.gateway = new DiscordGateway({ debug, worker: true });
 	}
 
 	async login(token: string) {
-		this.gateway.login(token);
+		await this.gateway.login(token);
 		const discord = new DiscordXHR(token);
 		this.xhr = discord.xhr.bind(discord);
 	}

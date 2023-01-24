@@ -1,4 +1,4 @@
-import DiscordXHR from "./DiscordXHR.ts";
+import DiscordXHR from "./DiscordXHR";
 
 export default class MFA extends DiscordXHR {
 	constructor(public ticket: string) {

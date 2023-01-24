@@ -1,12 +1,12 @@
 export type HeadersOption = {
 	[key: string]: string;
 };
-export type JSON = boolean | number | string | null | { [key: string]: JSON } | JSON[];
+
 export type XHRMethod = "get" | "post" | "put" | "patch" | "delete" | "head" | "options" | "trace" | "connect";
 export type XHROptions = {
 	method?: XHRMethod;
 	headers?: HeadersOption;
-	data?: JSON | XMLHttpRequestBodyInit;
+	data?: object | XMLHttpRequestBodyInit;
 	response?: boolean;
 	responseType?: XMLHttpRequestResponseType;
 };
@@ -34,7 +34,7 @@ function fullURL(path = "/") {
 }
 
 export default class DiscordXHR {
-	_postProgress: ((e: ProgressEvent) => void) | undefined;
+	_postProgress?: (e: ProgressEvent) => void;
 
 	constructor(private token?: string) {}
 
@@ -42,6 +42,7 @@ export default class DiscordXHR {
 		return new Promise((res, rej) => {
 			// @ts-ignore: kaios
 			const xhr = new XMLHttpRequest({ mozAnon: true, mozSystem: true });
+			// @ts-ignore: kaios
 			if (method === "post") xhr.upload.onprogress = this._postProgress;
 			xhr.responseType = responseType;
 			xhr.open(method, fullURL(url), true);
