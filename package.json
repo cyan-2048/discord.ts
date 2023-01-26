@@ -2,7 +2,8 @@
 	"dependencies": {
 		"esbuild": "^0.17.3",
 		"svelte": "^3.55.1",
-		"ws": "^8.12.0"
+		"ws": "^8.12.0",
+		"xmlhttprequest": "^1.8.0"
 	},
 	"devDependencies": {
 		"@types/web": "^0.0.88",

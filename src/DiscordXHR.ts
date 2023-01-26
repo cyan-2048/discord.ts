@@ -36,7 +36,7 @@ function fullURL(path = "/") {
 export default class DiscordXHR {
 	_postProgress?: (e: ProgressEvent) => void;
 
-	constructor(private token?: string) {}
+	constructor(public token?: string) {}
 
 	xhr(url: string, { method = "get", headers = {}, data, response = true, responseType = "json" }: XHROptions = {}): Promise<any> {
 		return new Promise((res, rej) => {

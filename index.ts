@@ -4,21 +4,22 @@ import MFA from "./src/MFA";
 
 export default class Discord {
 	gateway: DiscordGateway;
-	xhr?: DiscordXHR["xhr"];
+	_xhr: DiscordXHR;
+	xhr: DiscordXHR["xhr"];
 
 	constructor(debug = false) {
 		this.gateway = new DiscordGateway({ debug, worker: true });
+		const _xhr = (this._xhr = new DiscordXHR());
+		this.xhr = _xhr.xhr.bind(_xhr);
 	}
 
 	async login(token: string) {
 		await this.gateway.login(token);
-		const discord = new DiscordXHR(token);
-		this.xhr = discord.xhr.bind(discord);
+		this._xhr.token = token;
 	}
 
 	async signin(email: string, password: string): Promise<MFA | string> {
-		const discord = new DiscordXHR();
-		const resp = (await discord.xhr("auth/login", {
+		const resp = (await this.xhr("auth/login", {
 			method: "post",
 			data: { email, password },
 		})) as any;

@@ -1,20 +1,49 @@
 import EventEmitter from "./EventEmitter";
 
-// import { writable } from "svelte/store";
-import { Deferred } from "./utils";
-import { pako } from "./pako.js";
+import { writable } from "svelte/store";
+import { Deferred } from "./libs/utils";
+import { pako } from "./libs/pako.js";
 
-interface GatewayEvent {
-	op: number;
-	d?: any;
-	s?: number;
-	t: string;
+type Dispatch = 0;
+type Heartbeat = 1;
+type Identify = 2;
+type PresenceUpdate = 3;
+type VoiceStateUpdate = 4;
+type Resume = 6;
+type Reconnect = 7;
+type RequestGuildMembers = 8;
+type InvalidSession = 9;
+type Hello = 10;
+type HeartbeatAck = 11;
+type GuildSync = 12;
+type LazyGuilds = 14;
+
+type GatewayOPCodes =
+	| Dispatch
+	| Heartbeat
+	| Identify
+	| PresenceUpdate
+	| VoiceStateUpdate
+	| Resume
+	| Reconnect
+	| RequestGuildMembers
+	| InvalidSession
+	| Hello
+	| HeartbeatAck
+	| GuildSync
+	| LazyGuilds;
+
+interface GatewayEvent<T = any> {
+	op: GatewayOPCodes;
+	d: T;
+	s: number;
+	t?: string;
 }
 
 class GatewayBase extends EventEmitter {
-	private token?: string | null = null;
-	private ws?: WebSocket | null = null;
-	private sequence_num?: number | null = null;
+	private token?: string;
+	private ws?: WebSocket;
+	private sequence_num: number | null = null;
 	private authenticated = false;
 	readonly streamURL = "wss://gateway.discord.gg/?v=9&encoding=json&compress=zlib-stream";
 	private pako = pako() as any;
@@ -39,43 +68,50 @@ class GatewayBase extends EventEmitter {
 	handlePacket(packet: GatewayEvent) {
 		this.debug("Handling packet with OP ", packet.op);
 
-		const callbacks = {
-			0: this.packetDispatch,
-			9: this.packetInvalidSess,
-			10: this.packetHello,
-			11: this.packetAck,
-		};
-
-		if (packet.op in callbacks) callbacks[packet.op].call(this, packet);
-		else this.debug("OP " + packet.op + "not found!");
+		switch (packet.op) {
+			case 0:
+				this.packetDispatch(packet);
+				break;
+			case 9:
+				this.packetInvalidSess(packet);
+				break;
+			case 10:
+				this.packetHello(packet);
+				break;
+			case 11:
+				this.packetAck();
+				break;
+			default:
+				this.debug("OP " + packet.op + "not found!");
+				break;
+		}
 	}
 	packetDispatch(packet: GatewayEvent) {
 		this.sequence_num = packet.s;
 		this.debug("dispatch:", packet);
-		this.emit("t:" + packet.t.toLowerCase(), packet.d);
+		packet.t && this.emit("t:" + packet.t.toLowerCase(), packet.d);
 	}
-	packetInvalidSess(packet: GatewayEvent) {
+	packetInvalidSess(packet: GatewayEvent<false>) {
 		this.debug("sess inv:", packet);
 		this.close();
 	}
 
-	packetHello(packet: GatewayEvent) {
-		const ws = this.ws;
+	packetHello(
+		packet: GatewayEvent<{
+			heartbeat_interval: number;
+		}>
+	) {
+		const ws = this.ws,
+			beatMeat = () => this.send({ op: 1, d: this.sequence_num });
 
 		this.debug("Sending initial heartbeat...");
-		this.send({
-			op: 1, // HEARTBEAT
-			d: this.sequence_num,
-		});
+		beatMeat();
 
 		const interval = setInterval(() => {
 			if (ws !== this.ws) return clearInterval(interval);
 			this.debug("Sending heartbeat...");
-			this.send({
-				op: 1, // HEARTBEAT
-				d: this.sequence_num,
-			});
-		}, packet.d.heartbeat_interval);
+			beatMeat();
+		}, packet.d.heartbeat_interval) as unknown as number;
 		this.debug("heartbeat interval: ", packet.d.heartbeat_interval);
 	}
 
@@ -87,12 +123,6 @@ class GatewayBase extends EventEmitter {
 			d: {
 				status: "online",
 				token: this.token,
-				// intents: 0b11111111111111111,
-				// properties: {
-				// 	$os: "Android",
-				// 	$browser: "Discord Android",
-				// 	$device: "phone",
-				// },
 				properties: {
 					browser: "Discord Android",
 					device: "sveltecord, discord4kaios",
@@ -104,9 +134,8 @@ class GatewayBase extends EventEmitter {
 
 	close() {
 		this.ws?.close();
-		this.ws = null;
+		this.ws = undefined;
 		if (this._inflate) {
-			// @ts-ignore
 			this._inflate.chunks = [];
 			this._inflate.onEnd = () => {};
 			this._inflate = null;
@@ -126,13 +155,11 @@ class GatewayBase extends EventEmitter {
 		ws.binaryType = "arraybuffer";
 
 		this._inflate.onEnd = (e: number) => {
-			// @ts-ignore
-			if (e !== pako.Z_OK) throw new Error("zlib error, ".concat(e, ", ").concat(this._inflate.strm.msg));
+			if (e !== pako.Z_OK) throw new Error(`zlib error, ${e}, ${this._inflate.strm.msg}`);
 
-			// @ts-ignore
 			const chunks = this._inflate?.chunks as string[];
 
-			const result = chunks?.join("");
+			const result = chunks.join("");
 			result && this.handlePacket(JSON.parse(result));
 			chunks.length = 0;
 		};
@@ -141,13 +168,12 @@ class GatewayBase extends EventEmitter {
 			if (!this._inflate) return;
 			const r = new DataView(data as ArrayBuffer),
 				o = r.byteLength >= 4 && 65535 === r.getUint32(r.byteLength - 4, false);
-			// @ts-ignore
 			this._inflate.push(data, !!o && pako.Z_SYNC_FLUSH);
 		});
 
 		ws.addEventListener("open", () => this.debug("Sending Identity [OP 2]..."));
 		ws.addEventListener("close", () => {
-			this.ws = null;
+			this.ws = undefined;
 			this.close();
 			console.error("Discord gateway closed!");
 			this.emit("close");
@@ -162,6 +188,7 @@ function startWorker() {
 	});
 	self.onmessage = ({ data }) => {
 		if (data === "worker:debug") gateway._debug = true;
+		// @ts-ignore: not important
 		else gateway[data.evt](...data.data);
 	};
 	self.postMessage("worker:ready");
@@ -183,6 +210,11 @@ class GatewayWorker extends EventEmitter {
 	}
 }
 
+export function workerScript() {
+	const importFunc = (func: Function) => `var ${func.name}=${func.toString()};`;
+	return `${[pako, EventEmitter, GatewayBase].map(importFunc).join("\n")}(${startWorker.toString()})()`;
+}
+
 class Gateway extends EventEmitter {
 	private backend: GatewayWorker | GatewayBase;
 	private ready = Promise.resolve();
@@ -198,7 +230,8 @@ class Gateway extends EventEmitter {
 	}
 	async run(command: RunCommands, ...args: any[]) {
 		await this.ready;
-		if (this.backend[command]) this.backend[command](...args);
+		// @ts-ignore
+		if (this.backend instanceof GatewayBase) this.backend[command](...args);
 		else if ("run" in this.backend) this.backend.run(command, ...args);
 	}
 	setupMainThread(debug: boolean) {
@@ -208,15 +241,9 @@ class Gateway extends EventEmitter {
 		const deferred = new Deferred<void>();
 		this.ready = deferred.promise;
 
-		const importFunc = (func: Function) => `var ${func.name}=${func.toString()};`;
-
-		const toEval = `${[pako, EventEmitter, GatewayBase].map(importFunc).join("\n")}(${startWorker.toString()})()`;
-
-		console.log(toEval);
-
 		const worker = new Worker(
 			URL.createObjectURL(
-				new Blob([toEval], {
+				new Blob([workerScript()], {
 					type: "text/javascript",
 				})
 			)
@@ -238,6 +265,8 @@ class Gateway extends EventEmitter {
 	}
 }
 
+import type { ReadyEvent } from "./libs/types";
+
 export default class DiscordGateway extends Gateway {
 	// user_settings = writable(null);
 	// guilds = writable(null);
@@ -249,7 +278,11 @@ export default class DiscordGateway extends Gateway {
 
 	constructor({ debug = false, worker = true }) {
 		super({ debug, worker });
-		this.on("t:ready", (data) => {
+	}
+
+	bindEvents() {
+		this.on("t:ready", (data: ReadyEvent) => {
+			console.log(data);
 			const { user_settings, guilds, private_channels, read_state, user_guild_settings } = data;
 			//console.log({ user_settings, private_channels, guilds, read_state, user_guild_settings });
 		});
@@ -267,5 +300,6 @@ export default class DiscordGateway extends Gateway {
 
 	async close() {
 		await this.run("close");
+		this.offAll();
 	}
 }

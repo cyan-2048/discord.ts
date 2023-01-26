@@ -1,10 +1,8 @@
-type EventList = Map<string, Set<Function>>;
-
 export default class EventEmitter {
-	private events: EventList = new Map();
+	private _events = new Map<string, Set<Function>>();
 
 	on(event: string, listener: Function) {
-		this.events.set(event, (this.events.get(event) || new Set()).add(listener));
+		this._events.set(event, (this._events.get(event) || new Set()).add(listener));
 	}
 
 	once(event: string, listener: Function) {
@@ -16,11 +14,16 @@ export default class EventEmitter {
 	}
 
 	off(event: string, listener: Function) {
-		this.events.get(event)?.delete(listener);
+		this._events.get(event)?.delete(listener);
+	}
+
+	offAll(event?: string) {
+		if (event) this._events.delete(event);
+		else this._events.clear();
 	}
 
 	emit(event: string, ...args: any[]) {
-		this.events.get("*")?.forEach((listener) => listener(event, ...args));
-		this.events.get(event)?.forEach((listener) => listener(...args));
+		this._events.get("*")?.forEach((listener) => listener(event, ...args));
+		this._events.get(event)?.forEach((listener) => listener(...args));
 	}
 }
