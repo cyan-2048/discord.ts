@@ -10,7 +10,6 @@ export interface ReadyEvent {
 	relationships: Relationship[];
 	read_state: ReadState[];
 	private_channels: PrivateChannel[];
-	presences: any[];
 	guilds: Guild[];
 	country_code: string;
 	connected_accounts: ConnectedAccount[];

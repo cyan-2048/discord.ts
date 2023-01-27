@@ -265,33 +265,43 @@ class Gateway extends EventEmitter {
 	}
 }
 
-import type { ReadyEvent } from "./libs/types";
+import type { ReadyEvent, UserSettings } from "./libs/types";
+import ReadStateHandler from "./ReadStateHandler";
+import Discord from "./main";
 
 export default class DiscordGateway extends Gateway {
 	// user_settings = writable(null);
 	// guilds = writable(null);
 	// private_channels = writable(null);
-	// read_state = writable(null);
 	// user_guild_settings = writable(null);
 
 	private token: string | null = null;
 
-	constructor({ debug = false, worker = true }) {
-		super({ debug, worker });
-	}
+	private isReady = new Deferred();
 
-	bindEvents() {
+	constructor({ debug = false, worker = true } = {}, private DiscordInstance: Discord) {
+		super({ debug, worker });
+
 		this.on("t:ready", (data: ReadyEvent) => {
-			console.log(data);
+			// console.log(data);
 			const { user_settings, guilds, private_channels, read_state, user_guild_settings } = data;
+
+			this.user_settings = user_settings;
+			this.read_state = new ReadStateHandler(read_state, this);
 			//console.log({ user_settings, private_channels, guilds, read_state, user_guild_settings });
+			this.isReady.resolve(undefined);
 		});
 	}
 
+	user_settings?: UserSettings;
+	read_state?: ReadStateHandler;
+
 	async login(token: string) {
+		this.isReady = new Deferred();
 		await this.run("login", token);
 		await this.run("init");
 		this.token = token;
+		return this.isReady.promise;
 	}
 
 	async send(packet: any) {
@@ -300,6 +310,5 @@ export default class DiscordGateway extends Gateway {
 
 	async close() {
 		await this.run("close");
-		this.offAll();
 	}
 }

@@ -1,6 +1,6 @@
-import DiscordGateway from "./src/DiscordGateway";
-import DiscordXHR from "./src/DiscordXHR";
-import MFA from "./src/MFA";
+import DiscordGateway from "./DiscordGateway";
+import DiscordXHR from "./DiscordXHR";
+import MFA from "./MFA";
 
 export default class Discord {
 	gateway: DiscordGateway;
@@ -8,7 +8,7 @@ export default class Discord {
 	xhr: DiscordXHR["xhr"];
 
 	constructor(debug = false) {
-		this.gateway = new DiscordGateway({ debug, worker: true });
+		this.gateway = new DiscordGateway({ debug, worker: true }, this);
 		const _xhr = (this._xhr = new DiscordXHR());
 		this.xhr = _xhr.xhr.bind(_xhr);
 	}

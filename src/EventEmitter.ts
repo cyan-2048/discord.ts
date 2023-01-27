@@ -1,3 +1,5 @@
+export type Unsubscriber = () => void;
+
 export default class EventEmitter {
 	private _events = new Map<string, Set<Function>>();
 
@@ -15,6 +17,11 @@ export default class EventEmitter {
 
 	off(event: string, listener: Function) {
 		this._events.get(event)?.delete(listener);
+	}
+
+	subscribe(event: string, listener: Function): Unsubscriber {
+		this.on(event, listener);
+		return () => this.off(event, listener);
 	}
 
 	offAll(event?: string) {

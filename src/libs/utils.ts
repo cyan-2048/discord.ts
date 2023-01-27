@@ -8,6 +8,7 @@ export class Deferred<T> {
 	private readonly _promise: Promise<T>;
 	private _resolve!: (value: T | PromiseLike<T>) => void;
 	private _reject!: (reason: any) => void;
+	private done = false;
 
 	constructor() {
 		this._promise = new Promise<T>((resolve, reject) => {
@@ -21,10 +22,14 @@ export class Deferred<T> {
 	}
 
 	resolve = (value: T | PromiseLike<T>): void => {
+		if (this.done) return;
 		this._resolve(value);
+		this.done = true;
 	};
 
 	reject = (reason?: any): void => {
+		if (this.done) return;
 		this._reject(reason);
+		this.done = true;
 	};
 }
