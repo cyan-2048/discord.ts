@@ -278,15 +278,20 @@ export default class DiscordGateway extends Gateway {
 	private token: string | null = null;
 
 	private isReady = new Deferred();
+	xhr: Discord["xhr"];
+	user?: ReadyEvent["user"];
 
 	constructor({ debug = false, worker = true } = {}, private DiscordInstance: Discord) {
 		super({ debug, worker });
 
+		this.xhr = DiscordInstance.xhr;
+
 		this.on("t:ready", (data: ReadyEvent) => {
 			// console.log(data);
-			const { user_settings, guilds, private_channels, read_state, user_guild_settings } = data;
+			const { user_settings, guilds, private_channels, read_state, user_guild_settings, user } = data;
 
 			this.user_settings = user_settings;
+			this.user = user;
 			this.read_state = new ReadStateHandler(read_state, this);
 			//console.log({ user_settings, private_channels, guilds, read_state, user_guild_settings });
 			this.isReady.resolve(undefined);

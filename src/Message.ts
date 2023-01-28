@@ -1,6 +1,8 @@
+import { Writable, writable } from "svelte/store";
+import DiscordGateway from "./DiscordGateway";
 import type { User } from "./libs/types";
 
-export interface Message {
+export interface MessageRaw {
 	id: string;
 	type: number;
 	content: string;
@@ -84,4 +86,110 @@ export interface StickerItem {
 	id: string;
 	format_type: number;
 	name: string;
+}
+
+/**
+ * Not documented but mentioned
+ */
+export interface APIPartialEmoji {
+	/**
+	 * Emoji id
+	 */
+	id: string | null;
+	/**
+	 * Emoji name (can be null only in reaction emoji objects)
+	 */
+	name: string | null;
+	/**
+	 * Whether this emoji is animated
+	 */
+	animated?: boolean;
+}
+/**
+ * https://discord.com/developers/docs/resources/emoji#emoji-object-emoji-structure
+ */
+export interface APIEmoji extends APIPartialEmoji {
+	/**
+	 * Roles this emoji is whitelisted to
+	 */
+	roles?: string[];
+	/**
+	 * User that created this emoji
+	 */
+	user?: User;
+	/**
+	 * Whether this emoji must be wrapped in colons
+	 */
+	require_colons?: boolean;
+	/**
+	 * Whether this emoji is managed
+	 */
+	managed?: boolean;
+	/**
+	 * Whether this emoji can be used, may be false due to loss of Server Boosts
+	 */
+	available?: boolean;
+}
+
+/**
+ * TODO: reply method, must need to create Channel class
+ */
+export default class Message {
+	id: string;
+	properties: {
+		update: Writable<MessageRaw>["update"];
+		subscribe: Writable<MessageRaw>["subscribe"];
+	};
+	content: {
+		update: Writable<MessageRaw["content"]>["update"];
+		subscribe: Writable<MessageRaw["content"]>["subscribe"];
+	};
+
+	/**
+	 * TODO: use channel class instead of string id of channel and guild
+	 */
+	constructor(public rawMessage: MessageRaw, private gatewayInstance: DiscordGateway, private channelID?: string, private guildID?: string) {
+		this.id = rawMessage.id;
+		// not allowed to set new values to the writable
+		// we're only allowed to update object
+		// avoiding making new instances of objects
+		const { set: _, ...properties } = writable(rawMessage);
+		this.properties = properties;
+		const { set: __, ...messageContent } = writable(rawMessage.content);
+		this.content = messageContent;
+
+		if (!channelID) this.channelID = rawMessage.channel_id;
+	}
+
+	async edit(content: string, opts: any = {}) {
+		if (this.gatewayInstance.user?.id == this.rawMessage.author.id)
+			return this.gatewayInstance.xhr(`channels/${this.channelID}/messages/${this.id}`, {
+				method: "patch",
+				data: Object.assign({ content: content.trim() }, opts),
+			});
+	}
+
+	async delete() {
+		return this.gatewayInstance.xhr(`channels/${this.channelID}/messages/${this.id}`, { method: "delete" });
+	}
+
+	_emojiURI(emoji: APIEmoji | string) {
+		const en = encodeURIComponent;
+		if (typeof emoji === "object") {
+			return emoji.id ? en(emoji.name + ":" + emoji.id) : en(emoji.name || "");
+		}
+		return en(String(emoji));
+	}
+
+	async reaction(method: "put" | "delete", emoji: APIEmoji | string, user = "@me") {
+		return this.gatewayInstance.xhr(`channels/${this.channelID}/messages/${this.id}/reactions/${this._emojiURI(emoji)}/${user}`, { method });
+	}
+
+	async addReaction(...args: [APIEmoji | string, string?]) {
+		return this.reaction("put", ...args);
+	}
+
+	async removeReaction(...args: [APIEmoji | string, string?]) {
+		return this.reaction("delete", ...args);
+	}
 }
