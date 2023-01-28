@@ -1,4 +1,4 @@
-import { Writable, writable } from "svelte/store";
+import { Readable, readable, Subscriber, Writable, writable } from "svelte/store";
 import DiscordGateway from "./DiscordGateway";
 import type { User } from "./libs/types";
 
@@ -136,14 +136,15 @@ export interface APIEmoji extends APIPartialEmoji {
  */
 export default class Message {
 	id: string;
-	properties: {
-		update: Writable<MessageRaw>["update"];
-		subscribe: Writable<MessageRaw>["subscribe"];
-	};
-	content: {
-		update: Writable<MessageRaw["content"]>["update"];
-		subscribe: Writable<MessageRaw["content"]>["subscribe"];
-	};
+
+	properties: Readable<MessageRaw>;
+	updateProperties: (props: Partial<MessageRaw>) => void;
+
+	content: Readable<MessageRaw["content"]>;
+	updateContent: (content: MessageRaw["content"]) => void;
+
+	isUsed = false;
+	isUsedProps = false;
 
 	/**
 	 * TODO: use channel class instead of string id of channel and guild
@@ -153,10 +154,34 @@ export default class Message {
 		// not allowed to set new values to the writable
 		// we're only allowed to update object
 		// avoiding making new instances of objects
-		const { set: _, ...properties } = writable(rawMessage);
-		this.properties = properties;
-		const { set: __, ...messageContent } = writable(rawMessage.content);
-		this.content = messageContent;
+
+		const setProps_default = (this.updateProperties = (props) => void Object.assign(rawMessage, props));
+
+		this.properties = readable(rawMessage, (set) => {
+			this.updateProperties = (props) => {
+				setProps_default(props);
+				set(rawMessage);
+			};
+			this.isUsedProps = true;
+			return () => {
+				this.isUsedProps = false;
+				this.updateProperties = setProps_default;
+			};
+		});
+
+		const setContent_default = (this.updateContent = (content) => (rawMessage.content = content));
+
+		this.content = readable(rawMessage.content, (set) => {
+			this.isUsed = true;
+			this.updateContent = (content) => {
+				setContent_default(content);
+				set(content);
+			};
+			return () => {
+				this.isUsed = false;
+				this.updateContent = setContent_default;
+			};
+		});
 
 		if (!channelID) this.channelID = rawMessage.channel_id;
 	}

@@ -53,7 +53,12 @@ class GatewayBase extends EventEmitter {
 		super();
 	}
 
-	debug(...args: any[]) {
+	get debug(): Function {
+		if (!this._debug) return () => {};
+		return Function.prototype.bind.call(console.info, console, "[Gateway]");
+	}
+
+	__debug(...args: any[]) {
 		// we use console.info so that we can opt out when debugging
 		if (this._debug) console.info("[gateway] ", ...args);
 	}
