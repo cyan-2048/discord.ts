@@ -2,6 +2,7 @@ import EventEmitter from "./EventEmitter";
 
 import { Deferred } from "./libs/utils";
 import { pako } from "./libs/pako.js";
+import { Inflate } from "pako";
 
 type Dispatch = 0;
 type Heartbeat = 1;
@@ -39,13 +40,19 @@ interface GatewayEvent<T = any> {
 	t?: string;
 }
 
+interface Pako {
+	Inflate: typeof Inflate;
+	Z_SYNC_FLUSH: number;
+	Z_OK: number;
+}
+
 class GatewayBase extends EventEmitter {
 	private token?: string;
 	private ws?: WebSocket;
 	private sequence_num: number | null = null;
 	private authenticated = false;
 	readonly streamURL = "wss://gateway.discord.gg/?v=9&encoding=json&compress=zlib-stream";
-	private pako = pako() as any;
+	private pako = pako() as Pako;
 	private _inflate: any;
 
 	constructor(public _debug = false) {

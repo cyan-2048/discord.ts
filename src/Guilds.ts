@@ -130,11 +130,9 @@ export class Guild {
 					return profileRoles.includes(o.id) || isEveryone;
 				})
 				.map((o) => o.permissions)
-				.forEach((_perms) => {
-					const perms = Number(_perms);
-					Object.entries(bitwise2text).forEach(([_num, perm]) => {
-						const num = Number(_num);
-						if ((num & perms) == num) obj[perm] = true;
+				.forEach((perms) => {
+					Object.entries(bitwise2text).forEach(([num, perm]) => {
+						if ((+num & +perms) == +num) obj[perm] = true;
 					});
 				});
 
@@ -155,10 +153,9 @@ export class Guild {
 
 		overwrites.forEach((o) => {
 			if (profileRoles.includes(o.id)) {
-				Object.entries(bitwise2text).forEach(([_num, perm]) => {
-					const num = Number(_num);
-					if ((Number(o.deny) & num) == num) obj[perm] = false;
-					if ((Number(o.allow) & num) == num) obj[perm] = true;
+				Object.entries(bitwise2text).forEach(([num, perm]) => {
+					if ((+o.deny & +num) == +num) obj[perm] = false;
+					if ((+o.allow & +num) == +num) obj[perm] = true;
 				});
 			}
 		});

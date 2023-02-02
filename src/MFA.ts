@@ -7,7 +7,7 @@ export default class MFA extends DiscordXHR {
 	async auth(code: string) {
 		let len = code.length;
 
-		if (code === "" || isNaN(Number(code)) || len < 0 || len > 8) {
+		if (code === "" || isNaN(+code) || len < 0 || len > 8) {
 			throw new Error("Invalid code");
 		} else {
 			const resp = (await this.xhr("auth/mfa/totp", {
