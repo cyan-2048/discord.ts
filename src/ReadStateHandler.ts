@@ -23,23 +23,37 @@ interface MessageACKEvent {
 	ack_type?: 0;
 }
 
+interface ChannelUnreadUpdateEvent {
+	channel_unread_updates: ReadState[];
+	guild_id: string;
+}
+
 export default class ReadStateHandler extends EventEmitter {
 	private bindedEvents: Unsubscriber[] = [];
 	private cachedListeners: Map<string, ReadStateListener> = new Map();
 
-	constructor(private state: ReadState[], private gateway: DiscordGateway) {
+	constructor(private read_states: ReadState[], private gateway: DiscordGateway) {
 		super();
 		this.bindedEvents.push(
 			gateway.subscribe("t:message_ack", ({ mention_count, channel_id, message_id, ack_type }: MessageACKEvent) => {
-				const el = state.find((e) => e.id == channel_id);
+				const el = read_states.find((e) => e.id == channel_id);
+				let changed = false;
 				if (el) {
+					changed = el.last_message_id !== message_id;
 					el.last_message_id = message_id;
 					el.mention_count = mention_count || 0;
 				}
-				this.emit(channel_id);
+				if (changed) this.emit(channel_id);
+			}),
+			gateway.subscribe("t:channel_unread_update", (event: ChannelUnreadUpdateEvent) => {
+				event.channel_unread_updates.forEach((state) => {
+					let el = read_states.find((e) => e.id == state.id);
+					if (el && el.last_message_id !== state.last_message_id) {
+						el.last_message_id = state.last_message_id;
+						this.emit(el.id);
+					}
+				});
 			})
-			// for some reason this event is not emitted anymore?
-			// gateway.subscribe("t:channel_unread_update", () => {})
 		);
 	}
 
@@ -47,7 +61,7 @@ export default class ReadStateHandler extends EventEmitter {
 		const cached = this.cachedListeners.get(id);
 		if (cached) return cached;
 
-		const read_state = this.state.find((r) => r.id === id);
+		const read_state = this.read_states.find((r) => r.id === id);
 		if (!read_state) return null;
 		const listener = new ReadStateListener(read_state, this);
 		this.cachedListeners.set(id, listener);

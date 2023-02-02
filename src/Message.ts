@@ -1,8 +1,10 @@
 import { Readable, readable, Subscriber, Writable, writable } from "svelte/store";
 import DiscordGateway from "./DiscordGateway";
+import { Guild } from "./Guilds";
+import { GuildChannel } from "./GuildChannels";
 import type { User } from "./libs/types";
 
-export interface MessageRaw {
+export interface RawMessage {
 	id: string;
 	type: number;
 	content: string;
@@ -137,35 +139,35 @@ export interface APIEmoji extends APIPartialEmoji {
 export default class Message {
 	id: string;
 
-	properties: Readable<MessageRaw>;
-	updateProperties: (props: Partial<MessageRaw>) => void;
+	props: Readable<RawMessage>;
+	updateProps: (props: Partial<RawMessage>) => void;
 
-	content: Readable<MessageRaw["content"]>;
-	updateContent: (content: MessageRaw["content"]) => void;
+	content: Readable<RawMessage["content"]>;
+	updateContent: (content: RawMessage["content"]) => void;
 
 	isUsed = false;
 	isUsedProps = false;
+	channelID: string;
 
 	/**
 	 * TODO: use channel class instead of string id of channel and guild
 	 */
-	constructor(public rawMessage: MessageRaw, private gatewayInstance: DiscordGateway, private channelID?: string, private guildID?: string) {
+	constructor(public rawMessage: RawMessage, private gatewayInstance: DiscordGateway, private channelInstance: GuildChannel, private guildInstance: Guild) {
 		this.id = rawMessage.id;
 		// not allowed to set new values to the writable
 		// we're only allowed to update object
 		// avoiding making new instances of objects
+		const setProps_default = (this.updateProps = (props) => void Object.assign(rawMessage, props));
 
-		const setProps_default = (this.updateProperties = (props) => void Object.assign(rawMessage, props));
-
-		this.properties = readable(rawMessage, (set) => {
-			this.updateProperties = (props) => {
+		this.props = readable(rawMessage, (set) => {
+			this.updateProps = (props) => {
 				setProps_default(props);
 				set(rawMessage);
 			};
 			this.isUsedProps = true;
 			return () => {
 				this.isUsedProps = false;
-				this.updateProperties = setProps_default;
+				this.updateProps = setProps_default;
 			};
 		});
 
@@ -183,7 +185,7 @@ export default class Message {
 			};
 		});
 
-		if (!channelID) this.channelID = rawMessage.channel_id;
+		this.channelID = channelInstance.id;
 	}
 
 	async edit(content: string, opts: any = {}) {
@@ -216,5 +218,30 @@ export default class Message {
 
 	async removeReaction(...args: [APIEmoji | string, string?]) {
 		return this.reaction("delete", ...args);
+	}
+
+	pin(put = true) {
+		return this.gatewayInstance.xhr(`channels/${this.channelID}/pins/${this.id}`, { method: put ? "put" : "delete" });
+	}
+
+	unpin() {
+		return this.pin(false);
+	}
+
+	wouldPing() {
+		const userID = this.gatewayInstance.user?.id || "";
+		const roles = this.guildInstance.members.get(userID)?.rawProfile.roles || [];
+
+		if (!userID) return false;
+
+		const check = (e: any) => Array.isArray(e) && Boolean(e[0]);
+
+		const { mention_everyone, mentions, mention_roles } = this.rawMessage;
+
+		return Boolean(
+			mention_everyone ||
+				(check(mentions) && mentions.find((a) => a.id == userID)) || // linebreak pls
+				(check(roles) && check(mention_roles) && mention_roles.some((r) => roles?.includes(r)))
+		);
 	}
 }

@@ -42,8 +42,8 @@ export default class DiscordXHR {
 		return new Promise((res, rej) => {
 			// @ts-ignore: kaios
 			const xhr = new XMLHttpRequest({ mozAnon: true, mozSystem: true });
-			// @ts-ignore: kaios
-			if (method === "post") xhr.upload.onprogress = this._postProgress;
+
+			if (method === "post") xhr.upload.onprogress = this._postProgress || null;
 			xhr.responseType = responseType;
 			xhr.open(method, fullURL(url), true);
 
@@ -61,7 +61,7 @@ export default class DiscordXHR {
 				if (xhr.status < 200 || xhr.status >= 300) {
 					rej(xhr);
 				} else {
-					res(response ? xhr : xhr.response);
+					res(response ? xhr.response : xhr);
 				}
 			};
 			xhr.send(isJSON(data) ? JSON.stringify(data) : (data as XMLHttpRequestBodyInit));

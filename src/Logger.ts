@@ -8,9 +8,10 @@ interface Log {
  * stolen from betterdiscord
  */
 export default class Logger {
-	file: Log[] = [];
+	static file: Log[] = [];
+	static logToFile = false;
 
-	constructor(public name: string, public color: string = "#3E82E5", public logToFile = false) {}
+	constructor(public name: string, public color: string = "#3E82E5") {}
 
 	stacktrace(message: string, error: any) {
 		console.error(`%c[${this.name}]%c ${message}\n\n%c`, "color: #3a71c1; font-weight: 700;", "color: red; font-weight: 700;", "color: red;", error);
@@ -46,9 +47,9 @@ export default class Logger {
 
 	private _log(type = "log") {
 		const binded = Function.prototype.bind.call(console[type], console, `%c[${this.name}]%c`, `color: ${this.color}; font-weight: 700;`, "");
-		if (this.logToFile)
+		if (Logger.logToFile)
 			return (...message: any[]) => {
-				this.file.push({ stack: new Error().stack, type, message });
+				Logger.file.push({ stack: new Error().stack, type, message });
 				binded(...message);
 			};
 		return binded;

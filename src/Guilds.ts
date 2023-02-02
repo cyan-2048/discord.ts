@@ -1,0 +1,197 @@
+import { Readable, readable } from "svelte/store";
+import DiscordGateway from "./DiscordGateway";
+import { Unsubscriber } from "./EventEmitter";
+import GuildChannels from "./GuildChannels";
+import GuildMembers from "./GuildMembers";
+import { RawGuild, PermissionOverwrite } from "./libs/types";
+
+export const bitwise2text = {
+	64: "add_reactions",
+	8: "admin",
+	1024: "read",
+	2048: "write",
+	8192: "manage_messages",
+	32768: "attach",
+	65536: "history",
+	131072: "ping_everyone",
+	262144: "ext_emojis",
+	137438953472: "ext_stickers",
+	17179869184: "manage_threads",
+	34359738368: "make_pub_thread",
+	68719476736: "make_priv_thread",
+	274877906944: "write_thread",
+};
+
+interface RoleAccess {
+	add_reactions?: boolean;
+	admin?: boolean;
+	read?: boolean;
+	write?: boolean;
+	manage_messages?: boolean;
+	attach?: boolean;
+	history?: boolean;
+	ping_everyone?: boolean;
+	ext_emojis?: boolean;
+	ext_stickers?: boolean;
+	manage_threads?: boolean;
+	make_pub_thread?: boolean;
+	make_priv_thread?: boolean;
+	write_thread?: boolean;
+}
+
+export class Guild {
+	id: RawGuild["id"];
+
+	updateProps: (props: Partial<RawGuild>) => void;
+	props: Readable<RawGuild>;
+	isUsedProps: boolean = false;
+
+	members: GuildMembers;
+	channels: GuildChannels;
+
+	constructor(public rawGuild: RawGuild, private gatewayInstance: DiscordGateway) {
+		this.id = rawGuild.id;
+		const setProps_default = (this.updateProps = (props) => void Object.assign(rawGuild, props));
+
+		this.members = new GuildMembers(rawGuild.members, this, gatewayInstance);
+		this.channels = new GuildChannels(rawGuild.channels, this, gatewayInstance);
+
+		this.props = readable(rawGuild, (set) => {
+			this.updateProps = (props) => {
+				setProps_default(props);
+				set(rawGuild);
+			};
+			this.isUsedProps = true;
+			return () => {
+				this.isUsedProps = false;
+				this.updateProps = setProps_default;
+			};
+		});
+	}
+
+	async getServerProfile(userId: string) {
+		const e = this.members.get(userId);
+		if (e) return e;
+
+		const res = await this.gatewayInstance.xhr(`guilds/${this.id}/members/${userId == "@me" ? this.gatewayInstance.user?.id : userId}`);
+		console.log(res);
+		this.members.add(res);
+
+		return res;
+	}
+
+	/**
+	 * undocumented "Lazy Guilds" api, it will request for members and other state changes for the guild
+	 */
+	lazy() {
+		this.gatewayInstance.send({
+			op: 14,
+			d: {
+				activities: true,
+				guild_id: this.id,
+				threads: false,
+				typing: true,
+			},
+		});
+		this.gatewayInstance.send({
+			op: 8,
+			d: {
+				guild_id: [this.id],
+				query: "",
+				limit: 100,
+				presences: false,
+				user_ids: undefined,
+			},
+		});
+	}
+
+	parseRoleAccess(channelOverwrites: PermissionOverwrite[] = []) {
+		let obj: RoleAccess = {};
+
+		const user_id = this.gatewayInstance.user?.id;
+
+		if (!user_id) throw new Error("Gateway not initialized properly!");
+
+		const serverRoles = this.rawGuild.roles;
+		const isOwner = this.rawGuild.owner_id == user_id;
+		const profileRoles = this.members.get(user_id)?.rawProfile.roles;
+
+		if (!profileRoles || !serverRoles) throw new Error("Guild not initialized properly!");
+
+		let everyone_id: string | null = null;
+
+		if (serverRoles?.length > 0)
+			[...serverRoles]
+				.sort((a, b) => a.position - b.position)
+				.filter((o) => {
+					const isEveryone = o.position === 0;
+					if (isEveryone) everyone_id = o.id;
+
+					return profileRoles.includes(o.id) || isEveryone;
+				})
+				.map((o) => o.permissions)
+				.forEach((_perms) => {
+					const perms = Number(_perms);
+					Object.entries(bitwise2text).forEach(([_num, perm]) => {
+						const num = Number(_num);
+						if ((num & perms) == num) obj[perm] = true;
+					});
+				});
+
+		if (obj.admin === true || isOwner) {
+			Object.values(bitwise2text).forEach((a) => (obj[a] = true));
+			// console.error("person is admin, gib all perms true", obj);
+			return obj;
+		}
+
+		//	let grouped = groupBy(channelOverwrites, "type");
+
+		const overwrites = [...channelOverwrites];
+
+		const everyone = overwrites.findIndex((o) => o.id == everyone_id);
+		if (everyone != -1) {
+			overwrites.unshift(overwrites.splice(everyone, 1)[0]);
+		}
+
+		overwrites.forEach((o) => {
+			if (profileRoles.includes(o.id)) {
+				Object.entries(bitwise2text).forEach(([_num, perm]) => {
+					const num = Number(_num);
+					if ((Number(o.deny) & num) == num) obj[perm] = false;
+					if ((Number(o.allow) & num) == num) obj[perm] = true;
+				});
+			}
+		});
+
+		return obj;
+	}
+}
+
+export default class Guilds {
+	private guilds: Map<string, Guild> = new Map();
+	private bindedEvents: Unsubscriber[] = [];
+
+	constructor(initialData: RawGuild[], private gatewayInstance: DiscordGateway) {
+		initialData.forEach((rawGuild) => this.add(rawGuild));
+	}
+
+	update(id: string, props: Partial<RawGuild>) {
+		this.guilds.get(id)?.updateProps(props);
+	}
+
+	add(guild: RawGuild) {
+		this.get(guild.id) ? this.update(guild.id, guild) : this.guilds.set(guild.id, new Guild(guild, this.gatewayInstance));
+	}
+
+	getAll() {
+		return [...this.guilds.values()];
+	}
+
+	get(id: string) {
+		return this.guilds.get(id);
+	}
+
+	remove(id: string) {
+		this.guilds.delete(id);
+	}
+}

@@ -16,6 +16,7 @@ export default class Discord {
 	async login(token: string) {
 		await this.gateway.login(token);
 		this._xhr.token = token;
+		this.gateway.xhr = this.xhr;
 	}
 
 	async signin(email: string, password: string): Promise<MFA | string> {

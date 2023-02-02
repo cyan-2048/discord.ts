@@ -10,7 +10,7 @@ export interface ReadyEvent {
 	relationships: Relationship[];
 	read_state: ReadState[];
 	private_channels: PrivateChannel[];
-	guilds: Guild[];
+	guilds: RawGuild[];
 	country_code: string;
 	connected_accounts: ConnectedAccount[];
 	auth_session_id_hash: string;
@@ -31,7 +31,7 @@ export interface ConnectedAccount {
 	access_token?: string;
 }
 
-export interface Guild {
+export interface RawGuild {
 	max_members: number;
 	features: string[];
 	roles: Role[];
@@ -75,7 +75,7 @@ export interface Guild {
 	default_message_notifications: number;
 	lazy: boolean;
 	joined_at: Date;
-	members: Member[];
+	members: ServerProfile[];
 	name: string;
 	description: null | string;
 	system_channel_flags: number;
@@ -86,6 +86,7 @@ export interface Guild {
 }
 
 export interface Channel {
+	guild_id?: string;
 	version: number;
 	type: number;
 	position: number;
@@ -162,7 +163,7 @@ export interface EntityMetadata {
 	location: string;
 }
 
-export interface Member {
+export interface ServerProfile {
 	user: User;
 	roles: string[];
 	premium_since: null;
@@ -174,6 +175,7 @@ export interface Member {
 	deaf: boolean;
 	communication_disabled_until: Date | null;
 	avatar: null;
+	guild_id?: string;
 }
 
 export interface User {

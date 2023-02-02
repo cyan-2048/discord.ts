@@ -1,6 +1,5 @@
 import EventEmitter from "./EventEmitter";
 
-import { writable } from "svelte/store";
 import { Deferred } from "./libs/utils";
 import { pako } from "./libs/pako.js";
 
@@ -56,11 +55,6 @@ class GatewayBase extends EventEmitter {
 	get debug(): Function {
 		if (!this._debug) return () => {};
 		return Function.prototype.bind.call(console.info, console, "[Gateway]");
-	}
-
-	__debug(...args: any[]) {
-		// we use console.info so that we can opt out when debugging
-		if (this._debug) console.info("[gateway] ", ...args);
 	}
 
 	login(token: string) {
@@ -217,7 +211,7 @@ class GatewayWorker extends EventEmitter {
 
 export function workerScript() {
 	const importFunc = (func: Function) => `var ${func.name}=${func.toString()};`;
-	return `${[pako, EventEmitter, GatewayBase].map(importFunc).join("\n")}(${startWorker.toString()})()`;
+	return `// GATEWAY\n${[pako, EventEmitter, GatewayBase].map(importFunc).join("\n")}(${startWorker.toString()})()`;
 }
 
 class Gateway extends EventEmitter {
@@ -273,6 +267,7 @@ class Gateway extends EventEmitter {
 import type { ReadyEvent, UserSettings } from "./libs/types";
 import ReadStateHandler from "./ReadStateHandler";
 import Discord from "./main";
+import Guilds, { Guild } from "./Guilds";
 
 export default class DiscordGateway extends Gateway {
 	// user_settings = writable(null);
@@ -285,6 +280,7 @@ export default class DiscordGateway extends Gateway {
 	private isReady = new Deferred();
 	xhr: Discord["xhr"];
 	user?: ReadyEvent["user"];
+	guilds?: Guilds;
 
 	constructor({ debug = false, worker = true } = {}, private DiscordInstance: Discord) {
 		super({ debug, worker });
@@ -300,6 +296,7 @@ export default class DiscordGateway extends Gateway {
 			this.read_state = new ReadStateHandler(read_state, this);
 			//console.log({ user_settings, private_channels, guilds, read_state, user_guild_settings });
 			this.isReady.resolve(undefined);
+			this.guilds = new Guilds(guilds, this);
 		});
 	}
 
@@ -319,6 +316,8 @@ export default class DiscordGateway extends Gateway {
 	}
 
 	async close() {
+		this.read_state?.eject();
+		this.read_state = undefined;
 		await this.run("close");
 	}
 }
