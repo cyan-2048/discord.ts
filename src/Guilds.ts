@@ -3,7 +3,7 @@ import DiscordGateway from "./DiscordGateway";
 import { Unsubscriber } from "./EventEmitter";
 import GuildChannels from "./GuildChannels";
 import GuildMembers from "./GuildMembers";
-import { RawGuild, PermissionOverwrite } from "./libs/types";
+import { RawGuild, PermissionOverwrite, UserGuildSetting } from "./libs/types";
 
 export const bitwise2text = {
 	64: "add_reactions",
@@ -49,12 +49,12 @@ export class Guild {
 	members: GuildMembers;
 	channels: GuildChannels;
 
-	constructor(public rawGuild: RawGuild, private gatewayInstance: DiscordGateway) {
+	constructor(public rawGuild: RawGuild, private guildSettings: UserGuildSetting[], private gatewayInstance: DiscordGateway) {
 		this.id = rawGuild.id;
 		const setProps_default = (this.updateProps = (props) => void Object.assign(rawGuild, props));
 
 		this.members = new GuildMembers(rawGuild.members, this, gatewayInstance);
-		this.channels = new GuildChannels(rawGuild.channels, this, gatewayInstance);
+		this.channels = new GuildChannels(rawGuild.channels, guildSettings, this, gatewayInstance);
 
 		this.props = readable(rawGuild, (set) => {
 			this.updateProps = (props) => {
@@ -83,7 +83,7 @@ export class Guild {
 	/**
 	 * undocumented "Lazy Guilds" api, it will request for members and other state changes for the guild
 	 */
-	lazy() {
+	lazy(user_ids?: string[]) {
 		this.gatewayInstance.send({
 			op: 14,
 			d: {
@@ -100,7 +100,7 @@ export class Guild {
 				query: "",
 				limit: 100,
 				presences: false,
-				user_ids: undefined,
+				user_ids,
 			},
 		});
 	}
@@ -165,13 +165,18 @@ export class Guild {
 
 		return obj;
 	}
+
+	isMuted() {
+		const foundGuild = this.guildSettings.find((a) => a.guild_id == this.id);
+		return Boolean(foundGuild && foundGuild.muted);
+	}
 }
 
 export default class Guilds {
 	private guilds: Map<string, Guild> = new Map();
 	private bindedEvents: Unsubscriber[] = [];
 
-	constructor(initialData: RawGuild[], private gatewayInstance: DiscordGateway) {
+	constructor(initialData: RawGuild[], private guildSettings: UserGuildSetting[], private gatewayInstance: DiscordGateway) {
 		initialData.forEach((rawGuild) => this.add(rawGuild));
 	}
 
@@ -180,7 +185,7 @@ export default class Guilds {
 	}
 
 	add(guild: RawGuild) {
-		this.get(guild.id) ? this.update(guild.id, guild) : this.guilds.set(guild.id, new Guild(guild, this.gatewayInstance));
+		this.get(guild.id) ? this.update(guild.id, guild) : this.guilds.set(guild.id, new Guild(guild, this.guildSettings, this.gatewayInstance));
 	}
 
 	getAll() {

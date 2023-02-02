@@ -1,8 +1,9 @@
-import { Channel as RawChannel } from "./libs/types";
+import { Channel as RawChannel, UserGuildSetting } from "./libs/types";
 import { Guild } from "./Guilds";
 import DiscordGateway from "./DiscordGateway";
-import { readable, Readable } from "svelte/store";
+import { derived, readable, Readable } from "svelte/store";
 import { Unsubscriber } from "./EventEmitter";
+import { ReadStateListener } from "./ReadStateHandler";
 
 export class GuildChannel {
 	id: string;
@@ -12,8 +13,10 @@ export class GuildChannel {
 	isUsedProps = false;
 	position: number;
 	type: number;
+	readState?: ReadStateListener | null;
+	unread?: Readable<boolean>;
 
-	constructor(public rawChannel: RawChannel, private guildInstance: Guild, private gatewayInstance: DiscordGateway) {
+	constructor(public rawChannel: RawChannel, private guildSettings: UserGuildSetting[], private guildInstance: Guild, private gatewayInstance: DiscordGateway) {
 		this.id = rawChannel.id;
 		this.position = rawChannel.position;
 		this.type = rawChannel.type;
@@ -35,10 +38,23 @@ export class GuildChannel {
 				this.updateProps = setProps_default;
 			};
 		});
+
+		this.readState = this.gatewayInstance.read_state?.listen(this.id);
+
+		if (this.readState) this.unread = derived(this.readState, ($readState) => Boolean($readState.mention_count || $readState.last_message_id !== this.rawChannel.last_message_id));
 	}
 
 	roleAccess() {
 		return this.guildInstance.parseRoleAccess(this.rawChannel.permission_overwrites);
+	}
+
+	isMuted() {
+		const settings = this.guildSettings;
+		const guild = settings.find((e) => e.guild_id === this.guildInstance.id);
+		if (!guild) return false;
+		const find = guild.channel_overrides.find((a) => a.channel_id === this.id);
+		if (find) return find.muted;
+		return false;
 	}
 }
 
@@ -89,7 +105,7 @@ export default class GuildChannels {
 	private bindedEvents: Unsubscriber[] = [];
 	siftedChannels: Readable<GuildChannel[]>;
 
-	constructor(initialValue: RawChannel[], private guildInstance: Guild, private gatewayInstance: DiscordGateway) {
+	constructor(initialValue: RawChannel[], private guildSettings: UserGuildSetting[], private guildInstance: Guild, private gatewayInstance: DiscordGateway) {
 		initialValue.forEach((rawChannel) => this.add(rawChannel));
 
 		const shiftedChannels = [...this.channels.values()];
@@ -140,7 +156,9 @@ export default class GuildChannels {
 	}
 
 	add(channel: RawChannel) {
-		this.get(channel.id) ? this.update(channel.id, channel) : this.channels.set(channel.id, new GuildChannel(channel, this.guildInstance, this.gatewayInstance));
+		this.get(channel.id)
+			? this.update(channel.id, channel)
+			: this.channels.set(channel.id, new GuildChannel(channel, this.guildSettings, this.guildInstance, this.gatewayInstance));
 	}
 
 	get(id: string) {

@@ -3,7 +3,7 @@ import DiscordGateway from "./DiscordGateway";
 import EventEmitter, { Unsubscriber } from "./EventEmitter";
 import { ReadState } from "./libs/types";
 
-class ReadStateListener {
+export class ReadStateListener {
 	subscribe: Readable<ReadState>["subscribe"];
 	constructor(public read_state: ReadState, private handler: ReadStateHandler) {
 		this.subscribe = readable(read_state, (set) => {

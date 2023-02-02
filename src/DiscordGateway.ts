@@ -296,7 +296,7 @@ export default class DiscordGateway extends Gateway {
 			this.read_state = new ReadStateHandler(read_state, this);
 			//console.log({ user_settings, private_channels, guilds, read_state, user_guild_settings });
 			this.isReady.resolve(undefined);
-			this.guilds = new Guilds(guilds, this);
+			this.guilds = new Guilds(guilds, user_guild_settings, this);
 		});
 	}
 

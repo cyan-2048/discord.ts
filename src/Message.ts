@@ -3,6 +3,7 @@ import DiscordGateway from "./DiscordGateway";
 import { Guild } from "./Guilds";
 import { GuildChannel } from "./GuildChannels";
 import type { User } from "./libs/types";
+import { DirectMessageChannel } from "./DirectMessages";
 
 export interface RawMessage {
 	id: string;
@@ -152,7 +153,7 @@ export default class Message {
 	/**
 	 * TODO: use channel class instead of string id of channel and guild
 	 */
-	constructor(public rawMessage: RawMessage, private gatewayInstance: DiscordGateway, private channelInstance: GuildChannel, private guildInstance: Guild) {
+	constructor(public rawMessage: RawMessage, private gatewayInstance: DiscordGateway, private channelInstance: GuildChannel | DirectMessageChannel, private guildInstance?: Guild) {
 		this.id = rawMessage.id;
 		// not allowed to set new values to the writable
 		// we're only allowed to update object
@@ -230,7 +231,7 @@ export default class Message {
 
 	wouldPing() {
 		const userID = this.gatewayInstance.user?.id || "";
-		const roles = this.guildInstance.members.get(userID)?.rawProfile.roles || [];
+		const roles = this.guildInstance?.members.get(userID)?.rawProfile.roles || [];
 
 		if (!userID) return false;
 
