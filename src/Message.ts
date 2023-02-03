@@ -5,6 +5,55 @@ import { GuildChannel } from "./GuildChannels";
 import type { User } from "./libs/types";
 import { DirectMessageChannel } from "./DirectMessages";
 
+/**
+ * Not documented but mentioned
+ */
+export interface APIPartialEmoji {
+	/**
+	 * Emoji id
+	 */
+	id: string | null;
+	/**
+	 * Emoji name (can be null only in reaction emoji objects)
+	 */
+	name: string | null;
+	/**
+	 * Whether this emoji is animated
+	 */
+	animated?: boolean;
+}
+/**
+ * https://discord.com/developers/docs/resources/emoji#emoji-object-emoji-structure
+ */
+export interface APIEmoji extends APIPartialEmoji {
+	/**
+	 * Roles this emoji is whitelisted to
+	 */
+	roles?: string[];
+	/**
+	 * User that created this emoji
+	 */
+	user?: User;
+	/**
+	 * Whether this emoji must be wrapped in colons
+	 */
+	require_colons?: boolean;
+	/**
+	 * Whether this emoji is managed
+	 */
+	managed?: boolean;
+	/**
+	 * Whether this emoji can be used, may be false due to loss of Server Boosts
+	 */
+	available?: boolean;
+}
+
+export interface RawReaction {
+	count: number;
+	me: boolean;
+	emoji: APIEmoji;
+}
+
 export interface RawMessage {
 	id: string;
 	type: number;
@@ -91,47 +140,37 @@ export interface StickerItem {
 	name: string;
 }
 
-/**
- * Not documented but mentioned
- */
-export interface APIPartialEmoji {
-	/**
-	 * Emoji id
-	 */
-	id: string | null;
-	/**
-	 * Emoji name (can be null only in reaction emoji objects)
-	 */
-	name: string | null;
-	/**
-	 * Whether this emoji is animated
-	 */
-	animated?: boolean;
+class Reaction {
+	count = writable(this.rawReaction.count);
+	me = writable(this.rawReaction.me);
+
+	constructor(public rawReaction: RawReaction, private messageInstance: Message) {}
 }
-/**
- * https://discord.com/developers/docs/resources/emoji#emoji-object-emoji-structure
- */
-export interface APIEmoji extends APIPartialEmoji {
-	/**
-	 * Roles this emoji is whitelisted to
-	 */
-	roles?: string[];
-	/**
-	 * User that created this emoji
-	 */
-	user?: User;
-	/**
-	 * Whether this emoji must be wrapped in colons
-	 */
-	require_colons?: boolean;
-	/**
-	 * Whether this emoji is managed
-	 */
-	managed?: boolean;
-	/**
-	 * Whether this emoji can be used, may be false due to loss of Server Boosts
-	 */
-	available?: boolean;
+
+class ReactionsHandler {
+	private reactions = new Map<string, Reaction>();
+
+	isUsed = false;
+	props: Readable<Reaction[]>;
+	updateProps: (props: Iterable<Reaction>) => undefined | void;
+
+	constructor(initialData: RawReaction[], private messageInstance: Message) {
+		let reaction_arr: Reaction[] = initialData.map((rawReaction) => new Reaction(rawReaction, messageInstance));
+
+		const setProps_default = (this.updateProps = (props: Iterable<Reaction>) => void (reaction_arr = [...props]));
+
+		this.props = readable(reaction_arr, (set) => {
+			this.updateProps = (props) => {
+				setProps_default(props);
+				set(reaction_arr);
+			};
+			this.isUsed = true;
+			return () => {
+				this.isUsed = false;
+				this.updateProps = setProps_default;
+			};
+		});
+	}
 }
 
 /**
@@ -149,6 +188,8 @@ export default class Message {
 	isUsed = false;
 	isUsedProps = false;
 	channelID: string;
+
+	deleted = writable(false);
 
 	/**
 	 * TODO: use channel class instead of string id of channel and guild
