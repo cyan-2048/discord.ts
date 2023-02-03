@@ -4,7 +4,8 @@ import DiscordGateway from "./DiscordGateway";
 import { Unsubscriber } from "./EventEmitter";
 import { GuildChannel } from "./GuildChannels";
 import { Guild } from "./Guilds";
-import Message, { RawMessage } from "./Message";
+import { ServerProfile } from "./libs/types";
+import Message, { APIPartialEmoji, RawMessage } from "./Message";
 
 interface MessageDeleteEvent {
 	id: string;
@@ -16,6 +17,24 @@ interface MessageDeleteBulk {
 	ids: string[];
 	channel_id: string;
 	guild_id?: string;
+}
+
+interface MessageReactionRemoveAll {
+	channel_id: string;
+	message_id: string;
+	guild_id?: string;
+}
+
+interface MessageReactionRemoveEmoji extends MessageReactionRemoveAll {
+	emoji: APIPartialEmoji;
+}
+
+interface MessageReactionRemove extends MessageReactionRemoveEmoji {
+	user_id: string;
+}
+
+interface MessageReactionAdd extends MessageReactionRemove {
+	member?: ServerProfile;
 }
 
 export default class MessageHandlerBase {
@@ -69,6 +88,10 @@ export default class MessageHandlerBase {
 
 		const findByID = (id: string) => this.messages.find((m) => m.id == id);
 
+		const reactionToggle = (message: Message, emoji: APIPartialEmoji, user_id: string, add = true) => {
+			message.reactions[add ? "add" : "remove"](emoji, user_id == gatewayInstance.user?.id);
+		};
+
 		this.bindedEvents.push(
 			gatewayInstance.subscribe("t:message_create", (rawMessage: RawMessage) => {
 				if (rawMessage.channel_id == channelInstance.id) {
@@ -94,11 +117,35 @@ export default class MessageHandlerBase {
 					event.ids.forEach(deleteByID);
 				}
 			}),
-			gatewayInstance.subscribe("t:message_reaction_add", (event: any) => {
+			gatewayInstance.subscribe("t:message_reaction_add", (event: MessageReactionAdd) => {
 				if (event.channel_id == channelInstance.id) {
 					const message = findByID(event.message_id);
 					if (message) {
-						// TO DO REACTION HANDLER
+						reactionToggle(message, event.emoji, event.user_id);
+					}
+				}
+			}),
+			gatewayInstance.subscribe("t:message_reaction_remove", (event: MessageReactionRemove) => {
+				if (event.channel_id == channelInstance.id) {
+					const message = findByID(event.message_id);
+					if (message) {
+						reactionToggle(message, event.emoji, event.user_id, false);
+					}
+				}
+			}),
+			gatewayInstance.subscribe("t:message_reaction_remove_all", (event: MessageReactionRemoveAll) => {
+				if (event.channel_id == channelInstance.id) {
+					const message = findByID(event.message_id);
+					if (message) {
+						message.reactions.clear();
+					}
+				}
+			}),
+			gatewayInstance.subscribe("t:message_reaction_remove_emoji", (event: MessageReactionRemoveEmoji) => {
+				if (event.channel_id == channelInstance.id) {
+					const message = findByID(event.message_id);
+					if (message) {
+						message.reactions.removeEmoji(event.emoji);
 					}
 				}
 			})

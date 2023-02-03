@@ -1,4 +1,4 @@
-import { Readable, readable, Subscriber, Writable, writable } from "svelte/store";
+import { get, Readable, readable, Subscriber, Writable, writable } from "svelte/store";
 import DiscordGateway from "./DiscordGateway";
 import { Guild } from "./Guilds";
 import { GuildChannel } from "./GuildChannels";
@@ -74,6 +74,7 @@ export interface RawMessage {
 	message_reference?: MessageReference;
 	referenced_message?: ReferencedMessage;
 	sticker_items?: StickerItem[];
+	reactions?: RawReaction[];
 }
 
 export interface Attachment {
@@ -140,36 +141,106 @@ export interface StickerItem {
 	name: string;
 }
 
+function getReactionID(emoji: APIEmoji) {
+	return emoji.id || emoji.name || "";
+}
+
 class Reaction {
 	count = writable(this.rawReaction.count);
 	me = writable(this.rawReaction.me);
+	id: string;
 
-	constructor(public rawReaction: RawReaction, private messageInstance: Message) {}
+	constructor(public rawReaction: RawReaction, private messageInstance: Message) {
+		this.id = getReactionID(rawReaction.emoji);
+	}
+
+	toggle() {
+		this.messageInstance.reaction(get(this.me) ? "delete" : "put", this.rawReaction.emoji);
+	}
 }
 
 class ReactionsHandler {
 	private reactions = new Map<string, Reaction>();
 
+	static getReactionID = getReactionID;
+
 	isUsed = false;
-	props: Readable<Reaction[]>;
-	updateProps: (props: Iterable<Reaction>) => undefined | void;
+	state: Readable<Reaction[]>;
+	updateState: (props: Iterable<Reaction>) => void;
 
 	constructor(initialData: RawReaction[], private messageInstance: Message) {
-		let reaction_arr: Reaction[] = initialData.map((rawReaction) => new Reaction(rawReaction, messageInstance));
+		let reaction_arr: Reaction[] = [];
 
-		const setProps_default = (this.updateProps = (props: Iterable<Reaction>) => void (reaction_arr = [...props]));
+		initialData.forEach((rawReaction) => {
+			const react = new Reaction(rawReaction, messageInstance);
+			this.reactions.set(react.id, react);
+		});
 
-		this.props = readable(reaction_arr, (set) => {
-			this.updateProps = (props) => {
+		const setProps_default = (this.updateState = (props: Iterable<Reaction>) => {
+			reaction_arr.length = 0;
+			reaction_arr = [...props];
+		});
+
+		setProps_default(this.reactions.values());
+
+		this.state = readable(reaction_arr, (set) => {
+			this.updateState = (props) => {
 				setProps_default(props);
 				set(reaction_arr);
 			};
 			this.isUsed = true;
 			return () => {
 				this.isUsed = false;
-				this.updateProps = setProps_default;
+				this.updateState = setProps_default;
 			};
 		});
+	}
+
+	add(emoji: APIEmoji, me = false) {
+		const id = getReactionID(emoji);
+		const reaction = this.reactions.get(id);
+
+		if (reaction) {
+			reaction.count.update((count) => count + 1);
+			if (me) reaction.me.set(true);
+		} else {
+			const newReaction = new Reaction({ count: 1, me, emoji }, this.messageInstance);
+			this.reactions.set(id, newReaction);
+			this.updateState(this.reactions.values());
+		}
+	}
+
+	remove(emoji: APIEmoji, me = false) {
+		const id = getReactionID(emoji);
+		const reaction = this.reactions.get(id);
+
+		if (reaction) {
+			let removed = false;
+			reaction.count.update((count) => {
+				const r = count - 1;
+				if (!r) removed = true;
+				return r;
+			});
+
+			if (removed) {
+				this.reactions.delete(id);
+				this.updateState(this.reactions.values());
+				return;
+			}
+
+			if (me) reaction.me.set(false);
+		}
+	}
+
+	removeEmoji(emoji: APIEmoji) {
+		const id = getReactionID(emoji);
+		this.reactions.delete(id);
+		this.updateState(this.reactions.values());
+	}
+
+	clear() {
+		this.reactions.clear();
+		this.updateState([]);
 	}
 }
 
@@ -190,6 +261,7 @@ export default class Message {
 	channelID: string;
 
 	deleted = writable(false);
+	reactions: ReactionsHandler;
 
 	/**
 	 * TODO: use channel class instead of string id of channel and guild
@@ -228,6 +300,8 @@ export default class Message {
 		});
 
 		this.channelID = channelInstance.id;
+
+		this.reactions = new ReactionsHandler(rawMessage.reactions || [], this);
 	}
 
 	async edit(content: string, opts: any = {}) {
