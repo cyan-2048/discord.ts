@@ -4,6 +4,13 @@ import { Guild } from "./Guilds";
 import type { ServerProfile, User } from "./libs/types";
 import type { Unsubscriber } from "./EventEmitter";
 
+function decimal2rgb(ns) {
+	const r = Math.floor(ns / (256 * 256)),
+		g = Math.floor(ns / 256) % 256,
+		b = ns % 256;
+	return [r, g, b];
+}
+
 export class GuildMember {
 	id: string;
 	props: Readable<ServerProfile>;
@@ -11,7 +18,7 @@ export class GuildMember {
 
 	isUsedProps = false;
 
-	constructor(public rawProfile: ServerProfile, private guildInstance, private gatewayInstance) {
+	constructor(public rawProfile: ServerProfile, private guildInstance: Guild, private gatewayInstance: DiscordGateway) {
 		this.id = rawProfile.user.id;
 		const setProps_default = (this.updateProps = (props) => void Object.assign(rawProfile, props));
 
@@ -26,6 +33,14 @@ export class GuildMember {
 				this.updateProps = setProps_default;
 			};
 		});
+	}
+
+	/**
+	 * returns the color of the username
+	 */
+	getColor() {
+		const role = this.guildInstance.rawGuild.roles.find((o) => this.rawProfile.roles.includes(o.id) && o.color > 0);
+		return role ? decimal2rgb(role.color) : null;
 	}
 }
 

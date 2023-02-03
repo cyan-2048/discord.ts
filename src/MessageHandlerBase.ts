@@ -1,3 +1,4 @@
+import { tick } from "svelte";
 import { Readable, readable } from "svelte/store";
 import { DirectMessage, DirectMessageChannel } from "./DirectMessages";
 import DiscordGateway from "./DiscordGateway";
@@ -5,6 +6,7 @@ import { Unsubscriber } from "./EventEmitter";
 import { GuildChannel } from "./GuildChannels";
 import { Guild } from "./Guilds";
 import { ServerProfile } from "./libs/types";
+import { last, minutesDiff, sleep, toQuery } from "./libs/utils";
 import Message, { APIPartialEmoji, RawMessage } from "./Message";
 
 interface MessageDeleteEvent {
@@ -37,14 +39,50 @@ interface MessageReactionAdd extends MessageReactionRemove {
 	member?: ServerProfile;
 }
 
+async function graduallyPush(
+	messageType: typeof Message,
+	targetArray: any[],
+	thingsToPush: any[],
+	gatewayInstance: DiscordGateway,
+	channelInstance: GuildChannel,
+	guildInstance?: Guild,
+	push = true
+) {
+	for (let i = 0; i < thingsToPush.length; i++) {
+		await sleep(MessageHandlerBase.gradualPushInterval);
+		const element = thingsToPush[i];
+		targetArray[push ? "push" : "unshift"](new messageType(element, gatewayInstance, channelInstance, guildInstance));
+		await tick();
+	}
+}
+
+function mapMessages(
+	messageType: typeof Message | typeof DirectMessage,
+	messages: RawMessage[],
+	gatewayInstance: DiscordGateway,
+	channelInstance: GuildChannel,
+	guildInstance?: Guild
+) {
+	return messages.map((message) => new messageType(message, gatewayInstance, channelInstance, guildInstance));
+}
+
 export default class MessageHandlerBase {
 	public removeMessages = true;
 	private bindedEvents: Unsubscriber[] = [];
 	private messages: Message[] = [];
 
+	/**
+	 * If true, messages will be pushed gradually.
+	 * This can be enabled if rendering too many elements at once is very slow.
+	 */
+	static gradualPush = false;
+	static gradualPushInterval = 500;
+
 	isListening = false;
 	updateState: () => void;
 	state: Readable<Message[]>;
+
+	lastPush = Date.now();
 
 	constructor(
 		private messageType: typeof Message | typeof DirectMessage,
@@ -58,6 +96,20 @@ export default class MessageHandlerBase {
 			this.updateState = () => {
 				set(this.messages);
 			};
+			if (minutesDiff(this.lastPush) > 3) {
+				this.getMessages({ limit: 100, after: last(this.messages)?.id }).then(async (messages) => {
+					this.lastPush = Date.now();
+					if (!messages.length) return;
+					messages.reverse();
+					if (MessageHandlerBase.gradualPush) {
+						await graduallyPush(messageType, this.messages, messages, gatewayInstance, channelInstance, guildInstance);
+					} else {
+						this.messages.push(...mapMessages(messageType, messages, gatewayInstance, channelInstance, guildInstance));
+					}
+					this.updateState();
+				});
+			}
+
 			this.isListening = true;
 			return () => {
 				this.isListening = false;
@@ -66,8 +118,11 @@ export default class MessageHandlerBase {
 		});
 
 		const push = (rawMessage: RawMessage) => {
-			this.messages.push(new this.messageType(rawMessage, gatewayInstance, channelInstance, guildInstance));
+			const message = new this.messageType(rawMessage, gatewayInstance, channelInstance, guildInstance);
+			this.messages.push(message);
 			this.updateState();
+			this.lastPush = Date.now();
+			return message;
 		};
 
 		const remove = (message: Message) => {
@@ -95,7 +150,10 @@ export default class MessageHandlerBase {
 		this.bindedEvents.push(
 			gatewayInstance.subscribe("t:message_create", (rawMessage: RawMessage) => {
 				if (rawMessage.channel_id == channelInstance.id) {
-					push(rawMessage);
+					const message = push(rawMessage);
+					if (message.wouldPing()) {
+						gatewayInstance.read_state?.emit("mention_count_update", this.channelInstance.id, 1);
+					}
 				}
 			}),
 			gatewayInstance.subscribe("t:message_update", (rawMessage: RawMessage) => {
@@ -150,6 +208,33 @@ export default class MessageHandlerBase {
 				}
 			})
 		);
+	}
+
+	async loadMessages(limit = 15) {
+		if (this.messages.length > 1) {
+			const messages = await this.getMessages({ before: this.messages[0].id, limit });
+			if (!messages.length) return;
+			if (MessageHandlerBase.gradualPush) {
+				await graduallyPush(this.messageType, this.messages, messages, this.gatewayInstance, this.channelInstance, this.guildInstance, false);
+			} else {
+				messages.reverse();
+				this.messages.unshift(...mapMessages(this.messageType, messages, this.gatewayInstance, this.channelInstance, this.guildInstance));
+			}
+		} else if (!this.messages.length) {
+			const messages = await this.getMessages({ limit });
+			if (!messages.length) return;
+			messages.reverse();
+			if (MessageHandlerBase.gradualPush) {
+				await graduallyPush(this.messageType, this.messages, messages, this.gatewayInstance, this.channelInstance, this.guildInstance);
+			} else {
+				this.messages.push(...mapMessages(this.messageType, messages, this.gatewayInstance, this.channelInstance, this.guildInstance));
+			}
+		}
+		this.updateState();
+	}
+
+	async getMessages(query: { limit?: number; before?: string; after?: string; around?: string } = {}) {
+		return this.gatewayInstance.xhr(`channels/${this.channelInstance.id}/messages?` + toQuery(query), { method: "get" });
 	}
 
 	eject() {

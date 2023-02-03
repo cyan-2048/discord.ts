@@ -53,6 +53,8 @@ export class Guild {
 		this.id = rawGuild.id;
 		const setProps_default = (this.updateProps = (props) => void Object.assign(rawGuild, props));
 
+		rawGuild.roles.sort((a, b) => a.position - b.position);
+
 		this.members = new GuildMembers(rawGuild.members, this, gatewayInstance);
 		this.channels = new GuildChannels(rawGuild.channels, guildSettings, this, gatewayInstance);
 

@@ -33,3 +33,20 @@ export class Deferred<T> {
 		this.done = true;
 	};
 }
+
+export function toQuery(obj: any = {}) {
+	return Object.keys(obj)
+		.filter((a) => obj[a] != null)
+		.map((key) => `${key}=${encodeURIComponent(obj[key])}`)
+		.join("&");
+}
+
+export function minutesDiff(date: number) {
+	return Math.floor(Math.abs(Date.now() - date) / 1000 / 60);
+}
+
+export function last<T = any>(array: ArrayLike<T>) {
+	return array[array.length - 1];
+}
+
+export const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));

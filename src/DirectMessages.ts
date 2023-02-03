@@ -1,4 +1,5 @@
 import DiscordGateway from "./DiscordGateway";
+import { GuildChannel } from "./GuildChannels";
 import Message, { RawMessage } from "./Message";
 
 export class DirectMessage extends Message {
@@ -11,7 +12,7 @@ export class DirectMessage extends Message {
 	}
 }
 
-export class DirectMessageChannel {
+export class DirectMessageChannel extends GuildChannel {
 	id: string = "temp";
 }
 

@@ -53,6 +53,11 @@ export default class ReadStateHandler extends EventEmitter {
 						this.emit(el.id);
 					}
 				});
+			}),
+			this.subscribe("mention_count_update", (channelID: string, mentionCount: number) => {
+				const el = read_states.find((e) => e.id == channelID);
+				if (el) el.mention_count = el.mention_count + mentionCount;
+				this.emit(channelID);
 			})
 		);
 	}

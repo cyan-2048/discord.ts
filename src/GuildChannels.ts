@@ -4,6 +4,8 @@ import DiscordGateway from "./DiscordGateway";
 import { derived, readable, Readable } from "svelte/store";
 import { Unsubscriber } from "./EventEmitter";
 import { ReadStateListener } from "./ReadStateHandler";
+import MessageHandlerBase from "./MessageHandlerBase";
+import Message from "./Message";
 
 export class GuildChannel {
 	id: string;
@@ -15,6 +17,7 @@ export class GuildChannel {
 	type: number;
 	readState?: ReadStateListener | null;
 	unread?: Readable<boolean>;
+	messages: MessageHandlerBase;
 
 	constructor(public rawChannel: RawChannel, private guildSettings: UserGuildSetting[], private guildInstance: Guild, private gatewayInstance: DiscordGateway) {
 		this.id = rawChannel.id;
@@ -26,6 +29,8 @@ export class GuildChannel {
 			this.position = props.position || this.position;
 			this.type = props.type || this.type;
 		});
+
+		this.messages = new MessageHandlerBase(Message, this, gatewayInstance, guildInstance);
 
 		this.props = readable(rawChannel, (set) => {
 			this.updateProps = (props) => {
