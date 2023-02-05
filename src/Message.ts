@@ -1,9 +1,8 @@
 import { get, Readable, readable, Subscriber, Writable, writable } from "svelte/store";
 import DiscordGateway from "./DiscordGateway";
 import { Guild } from "./Guilds";
-import { GuildChannel } from "./GuildChannels";
+import { ChannelBase, CreateMessageParams, GuildChannel } from "./GuildChannels";
 import type { User } from "./libs/types";
-import { DirectMessageChannel } from "./DirectMessages";
 
 /**
  * Not documented but mentioned
@@ -78,7 +77,7 @@ export interface RawMessage {
 }
 
 export interface Attachment {
-	id: string;
+	id: string | number;
 	filename: string;
 	size: number;
 	url: string;
@@ -266,7 +265,7 @@ export default class Message {
 	/**
 	 * TODO: use channel class instead of string id of channel and guild
 	 */
-	constructor(public rawMessage: RawMessage, private gatewayInstance: DiscordGateway, private channelInstance: GuildChannel | DirectMessageChannel, private guildInstance?: Guild) {
+	constructor(public rawMessage: RawMessage, private gatewayInstance: DiscordGateway, private channelInstance: ChannelBase, private guildInstance?: Guild) {
 		this.id = rawMessage.id;
 		// not allowed to set new values to the writable
 		// we're only allowed to update object
@@ -342,6 +341,10 @@ export default class Message {
 
 	unpin() {
 		return this.pin(false);
+	}
+
+	reply(message: string = "", opts: Partial<CreateMessageParams> = {}, attachments?: File[] | Blob[]) {
+		return this.channelInstance.sendMessage(message, { ...opts, message_reference: { message_id: this.id, channel_id: this.channelInstance.id } }, attachments);
 	}
 
 	wouldPing() {

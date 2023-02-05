@@ -50,3 +50,7 @@ export function last<T = any>(array: ArrayLike<T>) {
 }
 
 export const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+export function generateNonce() {
+	return String(Date.now() * 512 * 1024);
+}

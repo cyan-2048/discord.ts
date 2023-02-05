@@ -5,10 +5,50 @@ import { derived, readable, Readable } from "svelte/store";
 import { Unsubscriber } from "./EventEmitter";
 import { ReadStateListener } from "./ReadStateHandler";
 import MessageHandlerBase from "./MessageHandlerBase";
-import Message from "./Message";
+import Message, { APIPartialEmoji, Attachment, Embed, MessageReference } from "./Message";
+import { generateNonce } from "./libs/utils";
 
-export class GuildChannel {
-	id: string;
+export interface CreateMessageParams {
+	content: string;
+	nonce?: string;
+	tts?: boolean;
+	message_reference?: MessageReference;
+	//	message_components?: // TODO
+	attachments?: Partial<Attachment>[];
+}
+
+export class ChannelBase {
+	constructor(public id: string, public guildSettings: UserGuildSetting[], public gatewayInstance: DiscordGateway) {}
+
+	sendMessage(message: string = "", opts: Partial<CreateMessageParams> = {}, attachments?: File[] | Blob[]) {
+		if (!message && !attachments) return;
+
+		const obj: CreateMessageParams = { content: message.trim(), nonce: generateNonce(), ...opts };
+		const url = `channels/${this.id}/messages`;
+
+		if (!attachments) return this.gatewayInstance.xhr(url, { method: "post", data: obj });
+
+		const form = new FormData();
+
+		obj.attachments = [];
+		const len = attachments.length;
+		for (let id = 0; id < len; id++) {
+			const file = attachments[id];
+			obj.attachments.push({ id, filename: file.name || "blob" });
+			form.append(`files[${id}]`, file);
+		}
+
+		form.append("payload_json", JSON.stringify(obj));
+
+		return this.gatewayInstance.xhr(url, { method: "post", data: form, response: false });
+	}
+
+	isMuted() {
+		return false;
+	}
+}
+
+export class GuildChannel extends ChannelBase {
 	props: Readable<RawChannel>;
 	updateProps: (props: Partial<RawChannel>) => void;
 
@@ -19,8 +59,8 @@ export class GuildChannel {
 	unread?: Readable<boolean>;
 	messages: MessageHandlerBase;
 
-	constructor(public rawChannel: RawChannel, private guildSettings: UserGuildSetting[], private guildInstance: Guild, private gatewayInstance: DiscordGateway) {
-		this.id = rawChannel.id;
+	constructor(public rawChannel: RawChannel, guildSettings: UserGuildSetting[], private guildInstance: Guild, gatewayInstance: DiscordGateway) {
+		super(rawChannel.id, guildSettings, gatewayInstance);
 		this.position = rawChannel.position;
 		this.type = rawChannel.type;
 

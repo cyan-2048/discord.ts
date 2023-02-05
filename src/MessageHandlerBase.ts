@@ -44,7 +44,7 @@ async function graduallyPush(
 	targetArray: any[],
 	thingsToPush: any[],
 	gatewayInstance: DiscordGateway,
-	channelInstance: GuildChannel,
+	channelInstance: GuildChannel | DirectMessageChannel,
 	guildInstance?: Guild,
 	push = true
 ) {
@@ -57,10 +57,10 @@ async function graduallyPush(
 }
 
 function mapMessages(
-	messageType: typeof Message | typeof DirectMessage,
+	messageType: typeof Message,
 	messages: RawMessage[],
 	gatewayInstance: DiscordGateway,
-	channelInstance: GuildChannel,
+	channelInstance: GuildChannel | DirectMessageChannel,
 	guildInstance?: Guild
 ) {
 	return messages.map((message) => new messageType(message, gatewayInstance, channelInstance, guildInstance));
@@ -85,7 +85,7 @@ export default class MessageHandlerBase {
 	lastPush = Date.now();
 
 	constructor(
-		private messageType: typeof Message | typeof DirectMessage,
+		private messageType: typeof Message,
 		private channelInstance: GuildChannel | DirectMessageChannel,
 		private gatewayInstance: DiscordGateway,
 		private guildInstance?: Guild
