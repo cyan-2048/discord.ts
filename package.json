@@ -9,5 +9,6 @@
 	"devDependencies": {
 		"@types/web": "^0.0.88",
 		"ts-node": "^10.9.1"
-	}
+	},
+	"main": "index.mjs"
 }
