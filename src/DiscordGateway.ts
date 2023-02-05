@@ -52,6 +52,7 @@ class GatewayBase extends EventEmitter {
 	private sequence_num: number | null = null;
 	private authenticated = false;
 	readonly streamURL = "wss://gateway.discord.gg/?v=9&encoding=json&compress=zlib-stream";
+	// @ts-ignore
 	private pako = pako() as Pako;
 	private _inflate: any;
 
