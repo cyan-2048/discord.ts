@@ -59,7 +59,7 @@ export class GuildChannel extends ChannelBase {
 	unread?: Readable<boolean>;
 	messages: MessageHandlerBase;
 
-	constructor(public rawChannel: RawChannel, guildSettings: UserGuildSetting[], private guildInstance: Guild, gatewayInstance: DiscordGateway) {
+	constructor(public rawChannel: RawChannel, guildSettings: UserGuildSetting[], private readonly guildInstance: Guild, gatewayInstance: DiscordGateway) {
 		super(rawChannel.id, guildSettings, gatewayInstance);
 		this.position = rawChannel.position;
 		this.type = rawChannel.type;
@@ -150,7 +150,12 @@ export default class GuildChannels {
 	private bindedEvents: Unsubscriber[] = [];
 	siftedChannels: Readable<GuildChannel[]>;
 
-	constructor(initialValue: RawChannel[], private guildSettings: UserGuildSetting[], private guildInstance: Guild, private gatewayInstance: DiscordGateway) {
+	constructor(
+		initialValue: RawChannel[],
+		private readonly guildSettings: UserGuildSetting[],
+		private readonly guildInstance: Guild,
+		private readonly gatewayInstance: DiscordGateway
+	) {
 		initialValue.forEach((rawChannel) => this.add(rawChannel));
 
 		const shiftedChannels = [...this.channels.values()];

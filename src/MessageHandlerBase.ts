@@ -85,10 +85,10 @@ export default class MessageHandlerBase {
 	lastPush = Date.now();
 
 	constructor(
-		private messageType: typeof Message,
-		private channelInstance: GuildChannel | DirectMessageChannel,
-		private gatewayInstance: DiscordGateway,
-		private guildInstance?: Guild
+		private readonly messageType: typeof Message,
+		private readonly channelInstance: GuildChannel | DirectMessageChannel,
+		private readonly gatewayInstance: DiscordGateway,
+		private readonly guildInstance?: Guild
 	) {
 		const setState_def = (this.updateState = () => {});
 

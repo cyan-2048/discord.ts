@@ -32,7 +32,7 @@ export default class ReadStateHandler extends EventEmitter {
 	private bindedEvents: Unsubscriber[] = [];
 	private cachedListeners: Map<string, ReadStateListener> = new Map();
 
-	constructor(private read_states: ReadState[], private gateway: DiscordGateway) {
+	constructor(private readonly read_states: ReadState[], private readonly gateway: DiscordGateway) {
 		super();
 		this.bindedEvents.push(
 			gateway.subscribe("t:message_ack", ({ mention_count, channel_id, message_id, ack_type }: MessageACKEvent) => {

@@ -149,7 +149,7 @@ class Reaction {
 	me = writable(this.rawReaction.me);
 	id: string;
 
-	constructor(public rawReaction: RawReaction, private messageInstance: Message) {
+	constructor(public rawReaction: RawReaction, private readonly messageInstance: Message) {
 		this.id = getReactionID(rawReaction.emoji);
 	}
 
@@ -167,7 +167,7 @@ class ReactionsHandler {
 	state: Readable<Reaction[]>;
 	updateState: (props: Iterable<Reaction>) => void;
 
-	constructor(initialData: RawReaction[], private messageInstance: Message) {
+	constructor(initialData: RawReaction[], private readonly messageInstance: Message) {
 		let reaction_arr: Reaction[] = [];
 
 		initialData.forEach((rawReaction) => {
@@ -265,7 +265,12 @@ export default class Message {
 	/**
 	 * TODO: use channel class instead of string id of channel and guild
 	 */
-	constructor(public rawMessage: RawMessage, private gatewayInstance: DiscordGateway, private channelInstance: ChannelBase, private guildInstance?: Guild) {
+	constructor(
+		public rawMessage: RawMessage,
+		private readonly gatewayInstance: DiscordGateway,
+		private readonly channelInstance: ChannelBase,
+		private readonly guildInstance?: Guild
+	) {
 		this.id = rawMessage.id;
 		// not allowed to set new values to the writable
 		// we're only allowed to update object

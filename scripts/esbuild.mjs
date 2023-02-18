@@ -44,11 +44,12 @@ const options = {
 };
 
 try {
-	await esbuild.build(options);
-	const regexp = /for((\s?)*)\(((\s?)*)const/g;
-	const text = await fs.readFile(outfile, "utf-8");
-	// on KaiOS aka Firefox48, for(const is broken
-	await fs.writeFile(outfile, text.replace(regexp, "for(let "), "utf-8");
+	const context = await esbuild.context(options);
+	context.watch();
+	// const regexp = /for((\s?)*)\(((\s?)*)const/g;
+	// const text = await fs.readFile(outfile, "utf-8");
+	// // on KaiOS aka Firefox48, for(const is broken
+	// await fs.writeFile(outfile, text.replace(regexp, "for(let "), "utf-8");
 } catch (err) {
 	console.error(err);
 	process.exit(1);

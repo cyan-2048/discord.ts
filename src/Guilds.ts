@@ -49,7 +49,7 @@ export class Guild {
 	members: GuildMembers;
 	channels: GuildChannels;
 
-	constructor(public rawGuild: RawGuild, private guildSettings: UserGuildSetting[], private gatewayInstance: DiscordGateway) {
+	constructor(public rawGuild: RawGuild, private readonly guildSettings: UserGuildSetting[], private readonly gatewayInstance: DiscordGateway) {
 		this.id = rawGuild.id;
 		const setProps_default = (this.updateProps = (props) => void Object.assign(rawGuild, props));
 
@@ -175,7 +175,7 @@ export default class Guilds {
 	private guilds: Map<string, Guild> = new Map();
 	private bindedEvents: Unsubscriber[] = [];
 
-	constructor(initialData: RawGuild[], private guildSettings: UserGuildSetting[], private gatewayInstance: DiscordGateway) {
+	constructor(initialData: RawGuild[], private readonly guildSettings: UserGuildSetting[], private readonly gatewayInstance: DiscordGateway) {
 		initialData.forEach((rawGuild) => this.add(rawGuild));
 	}
 

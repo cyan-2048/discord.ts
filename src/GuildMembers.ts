@@ -18,7 +18,7 @@ export class GuildMember {
 
 	isUsedProps = false;
 
-	constructor(public rawProfile: ServerProfile, private guildInstance: Guild, private gatewayInstance: DiscordGateway) {
+	constructor(public rawProfile: ServerProfile, private readonly guildInstance: Guild, private readonly gatewayInstance: DiscordGateway) {
 		this.id = rawProfile.user.id;
 		const setProps_default = (this.updateProps = (props) => void Object.assign(rawProfile, props));
 
@@ -60,7 +60,7 @@ export default class GuildMembers {
 	private profiles = new Map<string, GuildMember>();
 	private bindedEvents: Unsubscriber[] = [];
 
-	constructor(initialValue: ServerProfile[], private guildInstance: Guild, private gatewayInstance: DiscordGateway) {
+	constructor(initialValue: ServerProfile[], private readonly guildInstance: Guild, private readonly gatewayInstance: DiscordGateway) {
 		initialValue.forEach((profile) => this.add(profile));
 
 		this.bindedEvents.push(
