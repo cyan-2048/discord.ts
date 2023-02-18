@@ -151,8 +151,8 @@ export default class MessageHandlerBase {
 			gatewayInstance.subscribe("t:message_create", (rawMessage: RawMessage) => {
 				if (rawMessage.channel_id == channelInstance.id) {
 					const message = push(rawMessage);
-					if (message.wouldPing()) {
-						gatewayInstance.read_state?.emit("mention_count_update", this.channelInstance.id, 1);
+					if (message.wouldPing(true)) {
+						gatewayInstance.read_state?.emit("count_update", this.channelInstance.id, 1);
 					}
 				}
 			}),

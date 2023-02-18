@@ -9,8 +9,11 @@ export class DirectMessage extends Message {
 		super(rawMessage, gatewayInstance, channelInstance);
 	}
 
-	wouldPing() {
-		return false;
+	/**
+	 * @param mounted - whether this function is being called because a new message was created
+	 */
+	wouldPing(mounted = true) {
+		return Boolean(mounted && !this.channelInstance.isMuted()) || this._wouldPing();
 	}
 }
 

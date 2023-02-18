@@ -243,6 +243,8 @@ class ReactionsHandler {
 	}
 }
 
+const check_arr = (e: any) => Array.isArray(e) && Boolean(e[0]);
+
 /**
  * TODO: reply method, must need to create Channel class
  */
@@ -265,12 +267,7 @@ export default class Message {
 	/**
 	 * TODO: use channel class instead of string id of channel and guild
 	 */
-	constructor(
-		public rawMessage: RawMessage,
-		private readonly gatewayInstance: DiscordGateway,
-		private readonly channelInstance: ChannelBase,
-		private readonly guildInstance?: Guild
-	) {
+	constructor(public rawMessage: RawMessage, private readonly gatewayInstance: DiscordGateway, readonly channelInstance: ChannelBase, private readonly guildInstance?: Guild) {
 		this.id = rawMessage.id;
 		// not allowed to set new values to the writable
 		// we're only allowed to update object
@@ -352,20 +349,24 @@ export default class Message {
 		return this.channelInstance.sendMessage(message, { ...opts, message_reference: { message_id: this.id, channel_id: this.channelInstance.id } }, attachments);
 	}
 
-	wouldPing() {
+	_wouldPing() {
+		const userID = this.gatewayInstance.user?.id || "";
+
+		if (!userID) return false;
+
+		const { mention_everyone, mentions } = this.rawMessage;
+
+		return Boolean(mention_everyone || (check_arr(mentions) && mentions.find((a) => a.id == userID)));
+	}
+
+	wouldPing(...args: any[]) {
 		const userID = this.gatewayInstance.user?.id || "";
 		const roles = this.guildInstance?.members.get(userID)?.rawProfile.roles || [];
 
 		if (!userID) return false;
 
-		const check = (e: any) => Array.isArray(e) && Boolean(e[0]);
+		const { mention_roles } = this.rawMessage;
 
-		const { mention_everyone, mentions, mention_roles } = this.rawMessage;
-
-		return Boolean(
-			mention_everyone ||
-				(check(mentions) && mentions.find((a) => a.id == userID)) || // linebreak pls
-				(check(roles) && check(mention_roles) && mention_roles.some((r) => roles?.includes(r)))
-		);
+		return this._wouldPing() || Boolean(check_arr(mention_roles) && mention_roles.some((r) => roles?.includes(r)));
 	}
 }
