@@ -1,4 +1,4 @@
-import { get, Readable, readable, Subscriber, Writable, writable } from "svelte/store";
+import { get, Readable, readable, writable } from "stores";
 import DiscordGateway from "./DiscordGateway";
 import { Guild } from "./Guilds";
 import { ChannelBase, CreateMessageParams, GuildChannel } from "./GuildChannels";

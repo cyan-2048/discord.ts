@@ -1,5 +1,4 @@
-import { tick } from "svelte";
-import { Readable, readable } from "svelte/store";
+import { Readable, readable } from "stores";
 import { DirectMessage, DirectMessageChannel } from "./DirectMessages";
 import DiscordGateway from "./DiscordGateway";
 import { Unsubscriber } from "./EventEmitter";
@@ -52,7 +51,7 @@ async function graduallyPush(
 		await sleep(MessageHandlerBase.gradualPushInterval);
 		const element = thingsToPush[i];
 		targetArray[push ? "push" : "unshift"](new messageType(element, gatewayInstance, channelInstance, guildInstance));
-		await tick();
+		await sleep(0);
 	}
 }
 

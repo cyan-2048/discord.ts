@@ -222,19 +222,30 @@ export function workerScript() {
 	return `// GATEWAY\n${[pako, EventEmitter, GatewayBase].map(importFunc).join("\n")}(${startWorker.toString()})()`;
 }
 
-class Gateway extends EventEmitter {
-	private backend: GatewayWorker | GatewayBase;
+export class Gateway extends EventEmitter {
+	static workerSrc: null | string = null;
+	private backend!: GatewayWorker | GatewayBase;
 	private ready = Promise.resolve();
 	constructor({ debug = false, worker = true }) {
 		super();
+
 		if (worker && typeof Worker !== "undefined") {
-			this.backend = this.setupWorker(debug);
+			(async () => {
+				this.backend = await this.setupWorker(debug);
+				this.forwardEvents();
+			})();
+			return;
 		} else this.backend = this.setupMainThread(debug);
 
+		this.forwardEvents();
+	}
+
+	forwardEvents() {
 		this.backend.on("*", (evt: string, ...data: any[]) => {
 			this.emit(evt, ...data);
 		});
 	}
+
 	async run(command: RunCommands, ...args: any[]) {
 		await this.ready;
 		// @ts-ignore
@@ -244,13 +255,21 @@ class Gateway extends EventEmitter {
 	setupMainThread(debug: boolean) {
 		return new GatewayBase(debug);
 	}
-	setupWorker(debug: boolean) {
+	async setupWorker(debug: boolean) {
 		const deferred = new Deferred<void>();
 		this.ready = deferred.promise;
 
+		let script: null | string = null;
+		const src = Gateway.workerSrc;
+
+		if (src) {
+			const resp = await fetch(src);
+			script = await resp.text();
+		}
+
 		const worker = new Worker(
 			URL.createObjectURL(
-				new Blob([workerScript()], {
+				new Blob([script || workerScript()], {
 					type: "text/javascript",
 				})
 			)
@@ -276,6 +295,7 @@ import type { ReadyEvent, UserSettings } from "./libs/types";
 import ReadStateHandler from "./ReadStateHandler";
 import Discord from "./main";
 import Guilds, { Guild } from "./Guilds";
+import DirectMessages from "./DirectMessages";
 
 export default class DiscordGateway extends Gateway {
 	// user_settings = writable(null);
@@ -289,6 +309,7 @@ export default class DiscordGateway extends Gateway {
 	xhr: Discord["xhr"];
 	user?: ReadyEvent["user"];
 	guilds?: Guilds;
+	private_channels?: DirectMessages;
 
 	constructor({ debug = false, worker = true } = {}, private DiscordInstance: Discord) {
 		super({ debug, worker });
@@ -305,6 +326,7 @@ export default class DiscordGateway extends Gateway {
 			//console.log({ user_settings, private_channels, guilds, read_state, user_guild_settings });
 			this.isReady.resolve(undefined);
 			this.guilds = new Guilds(guilds, user_guild_settings, this);
+			this.private_channels = new DirectMessages(private_channels, this);
 		});
 	}
 

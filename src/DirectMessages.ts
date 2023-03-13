@@ -1,6 +1,6 @@
 import DiscordGateway from "./DiscordGateway";
 import { ChannelBase, CreateMessageParams, GuildChannel } from "./GuildChannels";
-import { UserGuildSetting, Channel } from "./libs/types";
+import { UserGuildSetting, Channel, PrivateChannel } from "./libs/types";
 import Message, { RawMessage } from "./Message";
 import MessageHandlerBase from "./MessageHandlerBase";
 
@@ -19,7 +19,7 @@ export class DirectMessage extends Message {
 
 export class DirectMessageChannel extends ChannelBase {
 	messages: MessageHandlerBase;
-	constructor(public rawChannel: Channel, guildSettings: UserGuildSetting[], gatewayInstance: DiscordGateway) {
+	constructor(public rawChannel: PrivateChannel, guildSettings: UserGuildSetting[], gatewayInstance: DiscordGateway) {
 		super(rawChannel.id, guildSettings, gatewayInstance);
 		this.messages = new MessageHandlerBase(DirectMessage, this, gatewayInstance);
 	}
@@ -34,4 +34,8 @@ export class DirectMessageChannel extends ChannelBase {
 	}
 }
 
-export default class DirectMessages {}
+export default class DirectMessages {
+	private channels = new Map<string, DirectMessageChannel>();
+
+	constructor(private initialData: PrivateChannel[], private gatewayInstance: DiscordGateway) {}
+}

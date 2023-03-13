@@ -1,4 +1,4 @@
-import { readable, Readable } from "svelte/store";
+import { readable, Readable } from "stores";
 import DiscordGateway from "./DiscordGateway";
 import { Guild } from "./Guilds";
 import type { ServerProfile, User } from "./libs/types";

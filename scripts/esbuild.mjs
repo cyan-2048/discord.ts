@@ -19,6 +19,29 @@ async function getPolyfills() {
 	return polyfills.code;
 }
 
+async function getWorkerScript() {
+	const result = await esbuild.build({
+		entryPoints: ["./scripts/workerScript.js"],
+		mainFields: ["svelte", "browser", "module", "main"],
+		minify: true,
+		bundle: true,
+		target: "es6",
+		treeShaking: true,
+		format: "iife",
+		write: false,
+	});
+
+	const script = eval(`
+	var OUTPUT = "";
+	${result.outputFiles[0].text}
+	OUTPUT;
+	`);
+
+	console.log(script);
+}
+
+getWorkerScript();
+
 const options = {
 	entryPoints: ["./test.ts"],
 	mainFields: ["svelte", "browser", "module", "main"],

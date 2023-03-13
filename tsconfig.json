@@ -9,7 +9,12 @@
 		"noImplicitAny": false,
 		"esModuleInterop": true,
 		"types": ["node", "web"],
-		"outDir": "./dist/"
+		"outDir": "./dist/",
+		"baseUrl": "./",
+		"paths": {
+			"@/*": ["src/*"],
+			"stores": ["src/libs/stores"]
+		}
 	},
 	"ts-node": {
 		"esm": true
