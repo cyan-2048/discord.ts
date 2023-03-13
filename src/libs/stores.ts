@@ -86,7 +86,6 @@ function createReadable<T = any>(initialValue: T, startStop: StartStopNotifier<T
 	}
 
 	subscribe[_signalKey] = _signal;
-	subscribe.test = listeners;
 
 	return {
 		subscribe,
