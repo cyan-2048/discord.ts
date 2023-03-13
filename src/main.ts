@@ -33,6 +33,7 @@ export default class Discord {
 	}
 }
 
-import { derived, get, readable, Readable, writable, Writable } from "./libs/stores";
+// fucking vite
+export type { Readable, Writable } from "./libs/stores";
 
-export { Readable, Writable, get, writable, readable, derived };
+export { get, writable, readable, derived } from "./libs/stores";
