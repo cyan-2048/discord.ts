@@ -33,4 +33,4 @@ export default class Discord {
 	}
 }
 
-export { Readable, Writable, get, writable, readable, derived } from "./libs/stores";
+export { Readable as Readable, Writable as Writable, get as get, writable as writable, readable as readable, derived as derived } from "./libs/stores";
