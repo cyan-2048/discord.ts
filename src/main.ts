@@ -34,6 +34,6 @@ export default class Discord {
 }
 
 // fucking vite
-export type { Readable, Writable } from "./libs/stores";
+export type { Readable, Writable } from "svelte/store";
 
-export { get, writable, readable, derived } from "./libs/stores";
+export { get, writable, readable, derived } from "svelte/store";

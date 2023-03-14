@@ -12,8 +12,7 @@
 		"outDir": "./dist/",
 		"baseUrl": "./",
 		"paths": {
-			"@/*": ["src/*"],
-			"stores": ["src/libs/stores"]
+			"@/*": ["src/*"]
 		}
 	},
 	"ts-node": {

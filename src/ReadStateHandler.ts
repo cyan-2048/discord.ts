@@ -1,4 +1,4 @@
-import { Readable, readable } from "stores";
+import { Readable, readable } from "svelte/store";
 import DiscordGateway from "./DiscordGateway";
 import EventEmitter, { Unsubscriber } from "./EventEmitter";
 import { ReadState } from "./libs/types";
