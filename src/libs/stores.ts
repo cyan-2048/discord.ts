@@ -108,6 +108,10 @@ function createReadable<T = any>(initialValue: T, startStop: StartStopNotifier<T
 function simulateGet<T>(store: Readable<T> | Writable<T>) {
 	if (store[_signalKey]) return store[_signalKey].value;
 	if (store[_readableKey]) return store[_readableKey]();
+
+	let val!: T;
+	store.subscribe((e) => (val = e))();
+	return val;
 }
 
 /**
