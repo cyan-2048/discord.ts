@@ -55,6 +55,8 @@ function createWritable<T = any>(initialValue: T): Writable<T> {
 	};
 }
 
+const _readableKey = Symbol();
+
 function createReadable<T = any>(initialValue: T, startStop: StartStopNotifier<T>): Readable<T> {
 	const _signal = signal<T>(initialValue);
 	const listeners: Function[] = [];
@@ -85,15 +87,27 @@ function createReadable<T = any>(initialValue: T, startStop: StartStopNotifier<T
 		};
 	}
 
-	subscribe[_signalKey] = _signal;
+	subscribe[_readableKey] = () => {
+		if (listeners.length) {
+			return _signal.peek();
+		} else {
+			let value!: T;
+
+			const clean = startStop((v) => (value = v));
+			if (typeof clean === "function") clean();
+
+			return value;
+		}
+	};
 
 	return {
 		subscribe,
 	};
 }
 
-function simulateGet(store: Readable<any> | Writable<any>) {
-	return store.subscribe[_signalKey]?.value;
+function simulateGet<T>(store: Readable<T> | Writable<T>) {
+	if (store[_signalKey]) return store[_signalKey].value;
+	if (store[_readableKey]) return store[_readableKey]();
 }
 
 /**
