@@ -101,6 +101,12 @@ export class GuildChannel extends ChannelBase {
 		if (find) return find.muted;
 		return false;
 	}
+
+	isPrivate() {
+		let ft = this.rawChannel.permission_overwrites?.find((l) => l.id == this.guildInstance.rawGuild.roles.find((p) => p.position == 0)?.id);
+		if (!ft) return false;
+		return (+ft.deny & 1024) == 1024;
+	}
 }
 
 function siftChannels(channels: GuildChannel[]) {
