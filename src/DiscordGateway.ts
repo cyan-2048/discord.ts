@@ -1,6 +1,6 @@
 import EventEmitter from "./EventEmitter";
 
-import { Deferred } from "./libs/utils";
+import { Deferred, sleep } from "./libs/utils";
 import { pako } from "./libs/pako.js";
 import { Inflate } from "pako";
 
@@ -259,20 +259,18 @@ export class Gateway extends EventEmitter {
 		const deferred = new Deferred<void>();
 		this.ready = deferred.promise;
 
-		let script: null | string = null;
-		const src = Gateway.workerSrc;
+		await sleep(100);
 
-		if (src) {
-			const resp = await fetch(src);
-			script = await resp.text();
-		}
+		// @ts-ignore
+		const src = Gateway.workerSrc || window.__workerSrc;
 
 		const worker = new Worker(
-			URL.createObjectURL(
-				new Blob([script || workerScript()], {
-					type: "text/javascript",
-				})
-			)
+			src ||
+				URL.createObjectURL(
+					new Blob([workerScript()], {
+						type: "text/javascript",
+					})
+				)
 		);
 
 		worker.addEventListener("message", function e({ data }) {

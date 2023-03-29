@@ -8,7 +8,7 @@ export default class Discord {
 	xhr: DiscordXHR["xhr"];
 
 	constructor(debug = false) {
-		this.gateway = new DiscordGateway({ debug, worker: false }, this);
+		this.gateway = new DiscordGateway({ debug, worker: true }, this);
 		const _xhr = (this._xhr = new DiscordXHR());
 		this.xhr = _xhr.xhr.bind(_xhr);
 	}
