@@ -107,6 +107,10 @@ export class GuildChannel extends ChannelBase {
 		if (!ft) return false;
 		return (+ft.deny & 1024) == 1024;
 	}
+
+	get name() {
+		return this.rawChannel.name;
+	}
 }
 
 function siftChannels(channels: GuildChannel[]) {

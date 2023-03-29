@@ -108,17 +108,19 @@ export class Guild {
 	}
 
 	parseRoleAccess(channelOverwrites: PermissionOverwrite[] = []) {
+		const rej = new Error("Gateway not initialized properly!");
+
 		let obj: RoleAccess = {};
 
 		const user_id = this.gatewayInstance.user?.id;
 
-		if (!user_id) throw new Error("Gateway not initialized properly!");
+		if (!user_id) throw rej;
 
 		const serverRoles = this.rawGuild.roles;
 		const isOwner = this.rawGuild.owner_id == user_id;
-		const profileRoles = this.members.get(user_id)?.rawProfile.roles;
+		const profileRoles = (this.members.get(user_id)?.rawProfile.roles || []).concat(user_id);
 
-		if (!profileRoles || !serverRoles) throw new Error("Guild not initialized properly!");
+		if (!profileRoles || !serverRoles) throw rej;
 
 		let everyone_id: string | null = null;
 
@@ -148,16 +150,19 @@ export class Guild {
 
 		const overwrites = [...channelOverwrites];
 
-		const everyone = overwrites.findIndex((o) => o.id == everyone_id);
-		if (everyone != -1) {
-			overwrites.unshift(overwrites.splice(everyone, 1)[0]);
+		if (everyone_id) {
+			const everyone = overwrites.findIndex((o) => o.id == everyone_id);
+			if (everyone != -1) {
+				overwrites.unshift(overwrites.splice(everyone, 1)[0]);
+				profileRoles.unshift(everyone_id);
+			}
 		}
 
 		overwrites.forEach((o) => {
 			if (profileRoles.includes(o.id)) {
 				Object.entries(bitwise2text).forEach(([num, perm]) => {
-					if ((+o.deny & +num) == +num) obj[perm] = false;
-					if ((+o.allow & +num) == +num) obj[perm] = true;
+					if ((+o.deny & +num) === +num) obj[perm] = false;
+					if ((+o.allow & +num) === +num) obj[perm] = true;
 				});
 			}
 		});
