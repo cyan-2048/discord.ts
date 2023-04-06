@@ -51,7 +51,8 @@ class GatewayBase extends EventEmitter {
 	private ws?: WebSocket;
 	private sequence_num: number | null = null;
 	private authenticated = false;
-	readonly streamURL = "wss://gateway.discord.gg/?v=9&encoding=json&compress=zlib-stream";
+	readonly streamURL =
+		"wss://gateway.discord.gg/?v=9&encoding=json&compress=zlib-stream";
 	// @ts-ignore
 	private pako = pako() as Pako;
 	private _inflate: any;
@@ -162,7 +163,8 @@ class GatewayBase extends EventEmitter {
 		ws.binaryType = "arraybuffer";
 
 		this._inflate.onEnd = (e: number) => {
-			if (e !== pako.Z_OK) throw new Error(`zlib error, ${e}, ${this._inflate.strm.msg}`);
+			if (e !== pako.Z_OK)
+				throw new Error(`zlib error, ${e}, ${this._inflate.strm.msg}`);
 
 			const chunks = this._inflate?.chunks as string[];
 
@@ -213,13 +215,16 @@ class GatewayWorker extends EventEmitter {
 		};
 	}
 	run(command: RunCommands, ...args: any[]) {
+		if (command === "close") return this.worker.terminate();
 		this.worker.postMessage({ evt: command, data: args });
 	}
 }
 
 export function workerScript() {
 	const importFunc = (func: Function) => `var ${func.name}=${func.toString()};`;
-	return `// GATEWAY\n${[pako, EventEmitter, GatewayBase].map(importFunc).join("\n")}(${startWorker.toString()})()`;
+	return `// GATEWAY\n${[pako, EventEmitter, GatewayBase]
+		.map(importFunc)
+		.join("\n")}(${startWorker.toString()})()`;
 }
 
 export class Gateway extends EventEmitter {
@@ -289,11 +294,12 @@ export class Gateway extends EventEmitter {
 	}
 }
 
-import type { ReadyEvent, UserSettings } from "./libs/types";
+import type { ReadyEvent, User, UserSettings } from "./libs/types";
 import ReadStateHandler from "./ReadStateHandler";
 import Discord from "./main";
-import Guilds, { Guild } from "./Guilds";
-import DirectMessages from "./DirectMessages";
+import Guilds from "./Guilds";
+import DirectMessages, { DirectMessageChannel } from "./DirectMessages";
+import { GuildChannel } from "./GuildChannels";
 
 export default class DiscordGateway extends Gateway {
 	// user_settings = writable(null);
@@ -308,15 +314,26 @@ export default class DiscordGateway extends Gateway {
 	user?: ReadyEvent["user"];
 	guilds?: Guilds;
 	private_channels?: DirectMessages;
+	users_cache = new Map<string, User>();
 
-	constructor({ debug = false, worker = true } = {}, private DiscordInstance: Discord) {
+	constructor(
+		{ debug = false, worker = true } = {},
+		private DiscordInstance: Discord
+	) {
 		super({ debug, worker });
 
 		this.xhr = DiscordInstance.xhr;
 
 		this.on("t:ready", (data: ReadyEvent) => {
 			// console.log(data);
-			const { user_settings, guilds, private_channels, read_state, user_guild_settings, user } = data;
+			const {
+				user_settings,
+				guilds,
+				private_channels,
+				read_state,
+				user_guild_settings,
+				user,
+			} = data;
 
 			this.user_settings = user_settings;
 			this.user = user;
@@ -326,6 +343,38 @@ export default class DiscordGateway extends Gateway {
 			this.guilds = new Guilds(guilds, user_guild_settings, this);
 			this.private_channels = new DirectMessages(private_channels, this);
 		});
+	}
+
+	/**
+	 * Find a channel by its ID
+	 */
+	findChannelByID(id: string): GuildChannel | DirectMessageChannel | null {
+		let channelFoundFromGuilds: GuildChannel | void;
+		// @ts-ignore
+		const guildsToSearchThrough = this.guilds?.guilds.values() || [];
+
+		for (const guild of guildsToSearchThrough) {
+			// @ts-ignore
+			for (const channel of guild.channels.channels.values()) {
+				if (channel.id === id) {
+					channelFoundFromGuilds = channel;
+					break;
+				}
+			}
+			if (channelFoundFromGuilds) return channelFoundFromGuilds;
+		}
+
+		// @ts-ignore
+		for (const dm of this.private_channels?.channels.values() || []) {
+			if (dm.id === id) return dm;
+		}
+
+		return null;
+	}
+
+	findGuildByID(id: string) {
+		if (id == "@me") return this.private_channels || null;
+		return this.guilds?.getAll().find((g) => g.id === id) || null;
 	}
 
 	user_settings?: UserSettings;
@@ -346,6 +395,7 @@ export default class DiscordGateway extends Gateway {
 	async close() {
 		this.read_state?.eject();
 		this.read_state = undefined;
+		this.emit("close");
 		await this.run("close");
 	}
 }

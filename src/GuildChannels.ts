@@ -18,15 +18,30 @@ export interface CreateMessageParams {
 }
 
 export class ChannelBase {
-	constructor(public id: string, public guildSettings: UserGuildSetting[], public gatewayInstance: DiscordGateway) {}
+	messages!: MessageHandlerBase;
 
-	sendMessage(message: string = "", opts: Partial<CreateMessageParams> = {}, attachments?: File[] | Blob[]) {
+	constructor(
+		public id: string,
+		public guildSettings: UserGuildSetting[],
+		public gatewayInstance: DiscordGateway
+	) {}
+
+	sendMessage(
+		message: string = "",
+		opts: Partial<CreateMessageParams> = {},
+		attachments?: File[] | Blob[]
+	) {
 		if (!message && !attachments) return;
 
-		const obj: CreateMessageParams = { content: message.trim(), nonce: generateNonce(), ...opts };
+		const obj: CreateMessageParams = {
+			content: message.trim(),
+			nonce: generateNonce(),
+			...opts,
+		};
 		const url = `channels/${this.id}/messages`;
 
-		if (!attachments) return this.gatewayInstance.xhr(url, { method: "post", data: obj });
+		if (!attachments)
+			return this.gatewayInstance.xhr(url, { method: "post", data: obj });
 
 		const form = new FormData();
 
@@ -34,13 +49,20 @@ export class ChannelBase {
 		const len = attachments.length;
 		for (let id = 0; id < len; id++) {
 			const file = attachments[id];
-			obj.attachments.push({ id, filename: file.name || "blob" });
+			obj.attachments.push({
+				id,
+				filename: "name" in file ? file.name : "blob",
+			});
 			form.append(`files[${id}]`, file);
 		}
 
 		form.append("payload_json", JSON.stringify(obj));
 
-		return this.gatewayInstance.xhr(url, { method: "post", data: form, response: false });
+		return this.gatewayInstance.xhr(url, {
+			method: "post",
+			data: form,
+			response: false,
+		});
 	}
 
 	isMuted() {

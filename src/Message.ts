@@ -1,7 +1,11 @@
-import { get, Readable, readable, writable } from "svelte/store";
+import { get, Readable, readable, Writable, writable } from "svelte/store";
 import DiscordGateway from "./DiscordGateway";
 import { Guild } from "./Guilds";
-import { ChannelBase, CreateMessageParams, GuildChannel } from "./GuildChannels";
+import {
+	ChannelBase,
+	CreateMessageParams,
+	GuildChannel,
+} from "./GuildChannels";
 import type { User } from "./libs/types";
 
 /**
@@ -145,16 +149,24 @@ function getReactionID(emoji: APIEmoji) {
 }
 
 class Reaction {
-	count = writable(this.rawReaction.count);
-	me = writable(this.rawReaction.me);
 	id: string;
+	count: Writable<number>;
+	me: Writable<boolean>;
 
-	constructor(public rawReaction: RawReaction, private readonly messageInstance: Message) {
+	constructor(
+		public rawReaction: RawReaction,
+		private readonly messageInstance: Message
+	) {
 		this.id = getReactionID(rawReaction.emoji);
+		this.count = writable(rawReaction.count);
+		this.me = writable(rawReaction.me);
 	}
 
 	toggle() {
-		this.messageInstance.reaction(get(this.me) ? "delete" : "put", this.rawReaction.emoji);
+		this.messageInstance.reaction(
+			get(this.me) ? "delete" : "put",
+			this.rawReaction.emoji
+		);
 	}
 }
 
@@ -167,7 +179,10 @@ class ReactionsHandler {
 	state: Readable<Reaction[]>;
 	updateState: (props: Iterable<Reaction>) => void;
 
-	constructor(initialData: RawReaction[], private readonly messageInstance: Message) {
+	constructor(
+		initialData: RawReaction[],
+		private readonly messageInstance: Message
+	) {
 		let reaction_arr: Reaction[] = [];
 
 		initialData.forEach((rawReaction) => {
@@ -175,7 +190,9 @@ class ReactionsHandler {
 			this.reactions.set(react.id, react);
 		});
 
-		const setProps_default = (this.updateState = (props: Iterable<Reaction>) => {
+		const setProps_default = (this.updateState = (
+			props: Iterable<Reaction>
+		) => {
 			reaction_arr.length = 0;
 			reaction_arr = [...props];
 		});
@@ -203,7 +220,10 @@ class ReactionsHandler {
 			reaction.count.update((count) => count + 1);
 			if (me) reaction.me.set(true);
 		} else {
-			const newReaction = new Reaction({ count: 1, me, emoji }, this.messageInstance);
+			const newReaction = new Reaction(
+				{ count: 1, me, emoji },
+				this.messageInstance
+			);
 			this.reactions.set(id, newReaction);
 			this.updateState(this.reactions.values());
 		}
@@ -267,12 +287,18 @@ export default class Message {
 	/**
 	 * TODO: use channel class instead of string id of channel and guild
 	 */
-	constructor(public rawMessage: RawMessage, private readonly gatewayInstance: DiscordGateway, readonly channelInstance: ChannelBase, private readonly guildInstance?: Guild) {
+	constructor(
+		public rawMessage: RawMessage,
+		private readonly gatewayInstance: DiscordGateway,
+		readonly channelInstance: ChannelBase,
+		readonly guildInstance?: Guild
+	) {
 		this.id = rawMessage.id;
 		// not allowed to set new values to the writable
 		// we're only allowed to update object
 		// avoiding making new instances of objects
-		const setProps_default = (this.updateProps = (props) => void Object.assign(rawMessage, props));
+		const setProps_default = (this.updateProps = (props) =>
+			void Object.assign(rawMessage, props));
 
 		this.props = readable(rawMessage, (set) => {
 			this.updateProps = (props) => {
@@ -286,7 +312,8 @@ export default class Message {
 			};
 		});
 
-		const setContent_default = (this.updateContent = (content) => (rawMessage.content = content));
+		const setContent_default = (this.updateContent = (content) =>
+			(rawMessage.content = content));
 
 		this.content = readable(rawMessage.content, (set) => {
 			this.isUsed = true;
@@ -307,14 +334,20 @@ export default class Message {
 
 	async edit(content: string, opts: any = {}) {
 		if (this.gatewayInstance.user?.id == this.rawMessage.author.id)
-			return this.gatewayInstance.xhr(`channels/${this.channelID}/messages/${this.id}`, {
-				method: "patch",
-				data: Object.assign({ content: content.trim() }, opts),
-			});
+			return this.gatewayInstance.xhr(
+				`channels/${this.channelID}/messages/${this.id}`,
+				{
+					method: "patch",
+					data: Object.assign({ content: content.trim() }, opts),
+				}
+			);
 	}
 
 	async delete() {
-		return this.gatewayInstance.xhr(`channels/${this.channelID}/messages/${this.id}`, { method: "delete" });
+		return this.gatewayInstance.xhr(
+			`channels/${this.channelID}/messages/${this.id}`,
+			{ method: "delete" }
+		);
 	}
 
 	_emojiURI(emoji: APIEmoji | string) {
@@ -325,8 +358,17 @@ export default class Message {
 		return en(String(emoji));
 	}
 
-	async reaction(method: "put" | "delete", emoji: APIEmoji | string, user = "@me") {
-		return this.gatewayInstance.xhr(`channels/${this.channelID}/messages/${this.id}/reactions/${this._emojiURI(emoji)}/${user}`, { method });
+	async reaction(
+		method: "put" | "delete",
+		emoji: APIEmoji | string,
+		user = "@me"
+	) {
+		return this.gatewayInstance.xhr(
+			`channels/${this.channelID}/messages/${
+				this.id
+			}/reactions/${this._emojiURI(emoji)}/${user}`,
+			{ method }
+		);
 	}
 
 	async addReaction(...args: [APIEmoji | string, string?]) {
@@ -338,15 +380,32 @@ export default class Message {
 	}
 
 	pin(put = true) {
-		return this.gatewayInstance.xhr(`channels/${this.channelID}/pins/${this.id}`, { method: put ? "put" : "delete" });
+		return this.gatewayInstance.xhr(
+			`channels/${this.channelID}/pins/${this.id}`,
+			{ method: put ? "put" : "delete" }
+		);
 	}
 
 	unpin() {
 		return this.pin(false);
 	}
 
-	reply(message: string = "", opts: Partial<CreateMessageParams> = {}, attachments?: File[] | Blob[]) {
-		return this.channelInstance.sendMessage(message, { ...opts, message_reference: { message_id: this.id, channel_id: this.channelInstance.id } }, attachments);
+	reply(
+		message: string = "",
+		opts: Partial<CreateMessageParams> = {},
+		attachments?: File[] | Blob[]
+	) {
+		return this.channelInstance.sendMessage(
+			message,
+			{
+				...opts,
+				message_reference: {
+					message_id: this.id,
+					channel_id: this.channelInstance.id,
+				},
+			},
+			attachments
+		);
 	}
 
 	_wouldPing() {
@@ -356,17 +415,27 @@ export default class Message {
 
 		const { mention_everyone, mentions } = this.rawMessage;
 
-		return Boolean(mention_everyone || (check_arr(mentions) && mentions.find((a) => a.id == userID)));
+		return Boolean(
+			mention_everyone ||
+				(check_arr(mentions) && mentions.find((a) => a.id == userID))
+		);
 	}
 
 	wouldPing(...args: any[]) {
 		const userID = this.gatewayInstance.user?.id || "";
-		const roles = this.guildInstance?.members.get(userID)?.rawProfile.roles || [];
+		const roles =
+			this.guildInstance?.members.get(userID)?.rawProfile.roles || [];
 
 		if (!userID) return false;
 
 		const { mention_roles } = this.rawMessage;
 
-		return this._wouldPing() || Boolean(check_arr(mention_roles) && mention_roles.some((r) => roles?.includes(r)));
+		return (
+			this._wouldPing() ||
+			Boolean(
+				check_arr(mention_roles) &&
+					mention_roles.some((r) => roles?.includes(r))
+			)
+		);
 	}
 }

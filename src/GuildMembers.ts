@@ -4,7 +4,7 @@ import { Guild } from "./Guilds";
 import type { ServerProfile, User } from "./libs/types";
 import type { Unsubscriber } from "./EventEmitter";
 
-function decimal2rgb(ns) {
+function decimal2rgb(ns: number) {
 	const r = Math.floor(ns / (256 * 256)),
 		g = Math.floor(ns / 256) % 256,
 		b = ns % 256;
@@ -18,9 +18,14 @@ export class GuildMember {
 
 	isUsedProps = false;
 
-	constructor(public rawProfile: ServerProfile, private readonly guildInstance: Guild, private readonly gatewayInstance: DiscordGateway) {
+	constructor(
+		public rawProfile: ServerProfile,
+		private readonly guildInstance: Guild,
+		private readonly gatewayInstance: DiscordGateway
+	) {
 		this.id = rawProfile.user.id;
-		const setProps_default = (this.updateProps = (props) => void Object.assign(rawProfile, props));
+		const setProps_default = (this.updateProps = (props) =>
+			void Object.assign(rawProfile, props));
 
 		this.props = readable(rawProfile, (set) => {
 			this.updateProps = (props) => {
@@ -39,7 +44,9 @@ export class GuildMember {
 	 * returns the color of the username
 	 */
 	getColor() {
-		const role = this.guildInstance.rawGuild.roles.find((o) => this.rawProfile.roles.includes(o.id) && o.color > 0);
+		const role = this.guildInstance.rawGuild.roles.find(
+			(o) => this.rawProfile.roles.includes(o.id) && o.color > 0
+		);
 		return role ? decimal2rgb(role.color) : null;
 	}
 }
@@ -60,39 +67,64 @@ export default class GuildMembers {
 	private profiles = new Map<string, GuildMember>();
 	private bindedEvents: Unsubscriber[] = [];
 
-	constructor(initialValue: ServerProfile[], private readonly guildInstance: Guild, private readonly gatewayInstance: DiscordGateway) {
+	constructor(
+		initialValue: ServerProfile[],
+		private readonly guildInstance: Guild,
+		private readonly gatewayInstance: DiscordGateway
+	) {
 		initialValue.forEach((profile) => this.add(profile));
 
 		this.bindedEvents.push(
-			gatewayInstance.subscribe("t:guild_members_chunk", (event: GuildMembersChunkEvent) => {
-				if (event.guild_id == guildInstance.id) {
-					event.members.forEach((profile) => this.add(profile));
+			gatewayInstance.subscribe(
+				"t:guild_members_chunk",
+				(event: GuildMembersChunkEvent) => {
+					if (event.guild_id == guildInstance.id) {
+						event.members.forEach((profile) => this.add(profile));
+					}
 				}
-			}),
-			gatewayInstance.subscribe("t:guild_member_update", (profile: ServerProfile) => {
-				if (profile.guild_id == guildInstance.id) {
-					this.update(profile.user.id, profile);
+			),
+			gatewayInstance.subscribe(
+				"t:guild_member_update",
+				(profile: ServerProfile) => {
+					if (profile.guild_id == guildInstance.id) {
+						this.update(profile.user.id, profile);
+					}
 				}
-			}),
-			gatewayInstance.subscribe("t:guild_member_remove", (event: GuildMemberRemoveEvent) => {
-				if (event.guild_id == guildInstance.id) {
-					this.profiles.delete(event.user.id);
+			),
+			gatewayInstance.subscribe(
+				"t:guild_member_remove",
+				(event: GuildMemberRemoveEvent) => {
+					if (event.guild_id == guildInstance.id) {
+						this.profiles.delete(event.user.id);
+					}
 				}
-			}),
-			gatewayInstance.subscribe("t:guild_member_add", (event: ServerProfile) => {
-				if (event.guild_id == guildInstance.id) {
-					this.add(event);
+			),
+			gatewayInstance.subscribe(
+				"t:guild_member_add",
+				(event: ServerProfile) => {
+					if (event.guild_id == guildInstance.id) {
+						this.add(event);
+					}
 				}
-			})
+			)
 		);
 	}
 
 	update(id: string, props: Partial<ServerProfile>) {
+		if (props.user) this.gatewayInstance.users_cache.set(id, props.user);
 		this.profiles.get(id)?.updateProps(props);
 	}
 
 	add(profile: ServerProfile) {
-		this.get(profile.user.id) ? this.update(profile.user.id, profile) : this.profiles.set(profile.user.id, new GuildMember(profile, this.guildInstance, this.gatewayInstance));
+		const userID = profile.user.id,
+			gateway = this.gatewayInstance;
+		gateway.users_cache.set(userID, profile.user);
+		this.get(userID)
+			? this.update(userID, profile)
+			: this.profiles.set(
+					userID,
+					new GuildMember(profile, this.guildInstance, gateway)
+			  );
 	}
 
 	get(id: string) {

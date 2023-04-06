@@ -232,6 +232,13 @@ export default class MessageHandlerBase {
 		this.updateState();
 	}
 
+	async ack() {
+		const lastMessage = this.messages[this.messages.length - 1];
+		if (lastMessage) {
+			await this.gatewayInstance.xhr(`channels/${this.channelInstance.id}/messages/${lastMessage.id}/ack`, { method: "post",  data: { token: "null" } });
+		}
+	}
+
 	async getMessages(query: { limit?: number; before?: string; after?: string; around?: string } = {}) {
 		return this.gatewayInstance.xhr(`channels/${this.channelInstance.id}/messages?` + toQuery(query), { method: "get" });
 	}
