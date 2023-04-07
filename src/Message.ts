@@ -78,7 +78,7 @@ export interface RawMessage {
 	referenced_message?: ReferencedMessage;
 	sticker_items?: StickerItem[];
 	reactions?: RawReaction[];
-	interactions?: {
+	interaction?: {
 		id: string;
 		type: number;
 		name: string;

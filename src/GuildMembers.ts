@@ -80,7 +80,9 @@ export default class GuildMembers {
 				"t:guild_members_chunk",
 				(event: GuildMembersChunkEvent) => {
 					if (event.guild_id == guildInstance.id) {
-						event.members.forEach((profile) => this.add(profile));
+						event.members.forEach((profile) => {
+							this.add(profile);
+						});
 					}
 				}
 			),
@@ -122,7 +124,7 @@ export default class GuildMembers {
 		const userID = profile.user.id,
 			gateway = this.gatewayInstance;
 		gateway.users_cache.set(userID, profile.user);
-		this.get(userID)
+		this.profiles.get(userID)
 			? this.update(userID, profile)
 			: this.profiles.set(
 					userID,
@@ -131,23 +133,28 @@ export default class GuildMembers {
 
 		const waited = this.waiting.get(userID);
 		if (waited) {
-			waited.resolve(this.get(userID));
+			// i am unsure if this is actually needed
+			// this.alreadySent.delete(userID);
+			waited.resolve(this.profiles.get(userID));
 			this.waiting.delete(userID);
 		}
 	}
 
 	private lastRequest = performance.now();
+	private alreadySent = new Set<string>();
 
 	private request() {
-		if (performance.now() - this.lastRequest < 5000) {
-			if (this.waiting.size > 5) {
-				setTimeout(() => this.request(), 3000);
-			}
-			return;
-		}
+		if (performance.now() - this.lastRequest < 3000) return;
 
-		setTimeout(() => {
+		setTimeout(async () => {
 			this.lastRequest = performance.now();
+			if (this.waiting.size == 0) return;
+			const user_ids = [...this.waiting.keys()].filter(
+				(id) => !this.alreadySent.has(id)
+			);
+			if (user_ids.length == 0) return;
+			user_ids.forEach((a) => this.alreadySent.add(a));
+
 			this.gatewayInstance.send({
 				op: 8,
 				d: {
@@ -155,11 +162,10 @@ export default class GuildMembers {
 					query: undefined,
 					limit: undefined,
 					presences: true,
-					user_ids: [...this.waiting.keys()],
+					user_ids,
 				},
 			});
-			this.waiting.clear();
-		}, 2000 + Math.floor(Math.random() * 1000));
+		}, 1000 + Math.floor(Math.random() * 1000));
 	}
 
 	/**
@@ -167,7 +173,7 @@ export default class GuildMembers {
 	 * @param userID
 	 */
 	lazy(userID: string): Promise<GuildMember> {
-		const member = this.get(userID);
+		const member = this.profiles.get(userID);
 		if (member) return Promise.resolve(member);
 
 		const alreadyWaiting = this.waiting.get(userID);
@@ -181,7 +187,9 @@ export default class GuildMembers {
 	}
 
 	get(id: string) {
-		return this.profiles.get(id);
+		const profile = this.profiles.get(id);
+		if (!profile) this.lazy(id);
+		return profile;
 	}
 
 	eject() {
