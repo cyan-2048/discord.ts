@@ -3,6 +3,7 @@ import DiscordGateway from "./DiscordGateway";
 import { Guild } from "./Guilds";
 import type { ServerProfile, User } from "./libs/types";
 import type { Unsubscriber } from "./EventEmitter";
+import { Deferred } from "./libs/utils";
 
 function decimal2rgb(ns: number) {
 	const r = Math.floor(ns / (256 * 256)),
@@ -115,6 +116,8 @@ export default class GuildMembers {
 		this.profiles.get(id)?.updateProps(props);
 	}
 
+	private waiting = new Map();
+
 	add(profile: ServerProfile) {
 		const userID = profile.user.id,
 			gateway = this.gatewayInstance;
@@ -125,6 +128,56 @@ export default class GuildMembers {
 					userID,
 					new GuildMember(profile, this.guildInstance, gateway)
 			  );
+
+		const waited = this.waiting.get(userID);
+		if (waited) {
+			waited.resolve(this.get(userID));
+			this.waiting.delete(userID);
+		}
+	}
+
+	private lastRequest = performance.now();
+
+	private request() {
+		if (performance.now() - this.lastRequest < 5000) {
+			if (this.waiting.size > 5) {
+				setTimeout(() => this.request(), 3000);
+			}
+			return;
+		}
+
+		setTimeout(() => {
+			this.lastRequest = performance.now();
+			this.gatewayInstance.send({
+				op: 8,
+				d: {
+					guild_id: [this.guildInstance.id],
+					query: undefined,
+					limit: undefined,
+					presences: true,
+					user_ids: [...this.waiting.keys()],
+				},
+			});
+			this.waiting.clear();
+		}, 2000 + Math.floor(Math.random() * 1000));
+	}
+
+	/**
+	 * lazily load user, useful so that we don't get banned for spamming requests
+	 * @param userID
+	 */
+	lazy(userID: string): Promise<GuildMember> {
+		const member = this.get(userID);
+		if (member) return Promise.resolve(member);
+
+		const alreadyWaiting = this.waiting.get(userID);
+		if (alreadyWaiting) return alreadyWaiting.promise;
+
+		const deferred = new Deferred<GuildMember>();
+		this.waiting.set(userID, deferred);
+		this.request();
+
+		return deferred.promise;
 	}
 
 	get(id: string) {
