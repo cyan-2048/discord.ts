@@ -78,6 +78,12 @@ export interface RawMessage {
 	referenced_message?: ReferencedMessage;
 	sticker_items?: StickerItem[];
 	reactions?: RawReaction[];
+	interactions?: {
+		id: string;
+		type: number;
+		name: string;
+		user: User;
+	};
 }
 
 export interface Attachment {
