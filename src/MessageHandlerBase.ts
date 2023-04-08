@@ -81,7 +81,7 @@ export default class MessageHandlerBase {
 	updateState: () => void;
 	state: Readable<Message[]>;
 
-	lastPush = Date.now();
+	lastPush = performance.now();
 
 	constructor(
 		private readonly messageType: typeof Message,
@@ -97,7 +97,7 @@ export default class MessageHandlerBase {
 			};
 			if (minutesDiff(this.lastPush) > 3) {
 				this.getMessages({ limit: 100, after: last(this.messages)?.id }).then(async (messages) => {
-					this.lastPush = Date.now();
+					this.lastPush = performance.now();
 					if (!messages.length) return;
 					messages.reverse();
 					if (MessageHandlerBase.gradualPush) {
@@ -120,7 +120,7 @@ export default class MessageHandlerBase {
 			const message = new this.messageType(rawMessage, gatewayInstance, channelInstance, guildInstance);
 			this.messages.push(message);
 			this.updateState();
-			this.lastPush = Date.now();
+			this.lastPush = performance.now();
 			return message;
 		};
 
