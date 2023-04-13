@@ -49,24 +49,14 @@ export class Guild {
 	members: GuildMembers;
 	channels: GuildChannels;
 
-	constructor(
-		public rawGuild: RawGuild,
-		private readonly guildSettings: UserGuildSetting[],
-		private readonly gatewayInstance: DiscordGateway
-	) {
+	constructor(public rawGuild: RawGuild, private readonly guildSettings: UserGuildSetting[], private readonly gatewayInstance: DiscordGateway) {
 		this.id = rawGuild.id;
-		const setProps_default = (this.updateProps = (props) =>
-			void Object.assign(rawGuild, props));
+		const setProps_default = (this.updateProps = (props) => void Object.assign(rawGuild, props));
 
 		rawGuild.roles.sort((a, b) => a.position - b.position);
 
 		this.members = new GuildMembers(rawGuild.members, this, gatewayInstance);
-		this.channels = new GuildChannels(
-			rawGuild.channels,
-			guildSettings,
-			this,
-			gatewayInstance
-		);
+		this.channels = new GuildChannels(rawGuild.channels, guildSettings, this, gatewayInstance);
 
 		this.props = readable(rawGuild, (set) => {
 			this.updateProps = (props) => {
@@ -85,11 +75,7 @@ export class Guild {
 		const e = this.members.get(userId);
 		if (e) return e;
 
-		const res = await this.gatewayInstance.xhr(
-			`guilds/${this.id}/members/${
-				userId == "@me" ? this.gatewayInstance.user?.id : userId
-			}`
-		);
+		const res = await this.gatewayInstance.xhr(`guilds/${this.id}/members/${userId == "@me" ? this.gatewayInstance.user?.id : userId}`);
 		this.members.add(res);
 
 		return this.members.get(userId) as GuildMember;
@@ -131,9 +117,7 @@ export class Guild {
 
 		const serverRoles = this.rawGuild.roles;
 		const isOwner = this.rawGuild.owner_id == user_id;
-		const profileRoles = (
-			this.members.get(user_id)?.rawProfile.roles || []
-		).concat(user_id);
+		const profileRoles = (this.members.get(user_id)?.rawProfile.roles || []).concat(user_id);
 
 		if (!profileRoles || !serverRoles) throw rej;
 
@@ -207,7 +191,7 @@ export default class Guilds {
 		this.get(guild.id) ? this.update(guild.id, guild) : this.guilds.set(guild.id, new Guild(guild, this.guildSettings, this.gatewayInstance));
 	}
 
-	getAll() {
+	getAll(): Guild[] {
 		return [...this.guilds.values()];
 	}
 
