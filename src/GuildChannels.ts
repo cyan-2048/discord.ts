@@ -20,17 +20,9 @@ export interface CreateMessageParams {
 export class ChannelBase {
 	messages!: MessageHandlerBase;
 
-	constructor(
-		public id: string,
-		public guildSettings: UserGuildSetting[],
-		public gatewayInstance: DiscordGateway
-	) {}
+	constructor(public id: string, public guildSettings: UserGuildSetting[], public gatewayInstance: DiscordGateway) {}
 
-	sendMessage(
-		message: string = "",
-		opts: Partial<CreateMessageParams> = {},
-		attachments?: File[] | Blob[]
-	) {
+	sendMessage(message: string = "", opts: Partial<CreateMessageParams> = {}, attachments?: File[] | Blob[]) {
 		if (!message && !attachments) return;
 
 		const obj: CreateMessageParams = {
@@ -40,8 +32,7 @@ export class ChannelBase {
 		};
 		const url = `channels/${this.id}/messages`;
 
-		if (!attachments)
-			return this.gatewayInstance.xhr(url, { method: "post", data: obj });
+		if (!attachments) return this.gatewayInstance.xhr(url, { method: "post", data: obj });
 
 		const form = new FormData();
 
@@ -108,7 +99,10 @@ export class GuildChannel extends ChannelBase {
 
 		this.readState = this.gatewayInstance.read_state?.listen(this.id);
 
-		if (this.readState) this.unread = derived(this.readState, ($readState) => Boolean($readState.mention_count || $readState.last_message_id !== this.rawChannel.last_message_id));
+		if (this.readState)
+			this.unread = derived(this.readState, ($readState) =>
+				Boolean(this.rawChannel.last_message_id && ($readState.mention_count || $readState.last_message_id !== this.rawChannel.last_message_id))
+			);
 	}
 
 	roleAccess() {

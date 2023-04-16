@@ -117,6 +117,8 @@ export default class MessageHandlerBase {
 		});
 
 		const push = (rawMessage: RawMessage) => {
+			// just for safety
+			if (this.messages.findLast((m) => m.id == rawMessage.id)) return null;
 			const message = new this.messageType(rawMessage, gatewayInstance, channelInstance, guildInstance);
 			this.messages.push(message);
 			this.updateState();
@@ -150,6 +152,8 @@ export default class MessageHandlerBase {
 			gatewayInstance.subscribe("t:message_create", (rawMessage: RawMessage) => {
 				if (rawMessage.channel_id == channelInstance.id) {
 					const message = push(rawMessage);
+					if (!message) return;
+					this.channelInstance.rawChannel.last_message_id = message.id;
 					if (message.wouldPing(true)) {
 						gatewayInstance.read_state?.emit("count_update", this.channelInstance.id, 1);
 					}
@@ -233,10 +237,10 @@ export default class MessageHandlerBase {
 	}
 
 	async ack() {
-		const lastMessage = this.messages[this.messages.length - 1];
-		if (lastMessage) {
-			await this.gatewayInstance.xhr(`channels/${this.channelInstance.id}/messages/${lastMessage.id}/ack`, { method: "post",  data: { token: "null" } });
-		}
+		await this.gatewayInstance.xhr(`channels/${this.channelInstance.id}/messages/${this.channelInstance.rawChannel.last_message_id}/ack`, {
+			method: "post",
+			data: { token: "null" },
+		});
 	}
 
 	async getMessages(query: { limit?: number; before?: string; after?: string; around?: string } = {}) {
