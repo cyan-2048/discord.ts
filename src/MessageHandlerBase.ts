@@ -154,6 +154,7 @@ export default class MessageHandlerBase {
 					const message = push(rawMessage);
 					if (!message) return;
 					this.channelInstance.rawChannel.last_message_id = message.id;
+					this.channelInstance.lastMessageID.set(message.id);
 					if (message.wouldPing(true)) {
 						gatewayInstance.read_state?.emit("count_update", this.channelInstance.id, 1);
 					}

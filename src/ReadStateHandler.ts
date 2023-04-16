@@ -8,6 +8,7 @@ export class ReadStateListener {
 	constructor(public read_state: ReadState, private handler: ReadStateHandler) {
 		this.subscribe = readable(read_state, (set) => {
 			return handler.subscribe(read_state.id, () => {
+				console.log("UPDATE OCCURED", read_state);
 				set(read_state);
 			});
 		}).subscribe;

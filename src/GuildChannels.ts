@@ -1,7 +1,7 @@
 import { Channel as RawChannel, UserGuildSetting } from "./libs/types";
 import { Guild } from "./Guilds";
 import DiscordGateway from "./DiscordGateway";
-import { derived, readable, Readable } from "svelte/store";
+import { derived, readable, Readable, Writable, writable } from "svelte/store";
 import { Unsubscriber } from "./EventEmitter";
 import { ReadStateListener } from "./ReadStateHandler";
 import MessageHandlerBase from "./MessageHandlerBase";
@@ -19,6 +19,8 @@ export interface CreateMessageParams {
 
 export class ChannelBase {
 	messages!: MessageHandlerBase;
+
+	lastMessageID: Writable<string | null> = writable(null);
 
 	constructor(public id: string, public guildSettings: UserGuildSetting[], public gatewayInstance: DiscordGateway) {}
 
@@ -97,11 +99,13 @@ export class GuildChannel extends ChannelBase {
 			};
 		});
 
+		this.lastMessageID.set(rawChannel.last_message_id || null);
+
 		this.readState = this.gatewayInstance.read_state?.listen(this.id);
 
 		if (this.readState)
-			this.unread = derived(this.readState, ($readState) =>
-				Boolean(this.rawChannel.last_message_id && ($readState.mention_count || $readState.last_message_id !== this.rawChannel.last_message_id))
+			this.unread = derived([this.readState, this.lastMessageID], ([$readState, $lastMessageID]) =>
+				Boolean($lastMessageID && ($readState.mention_count || $readState.last_message_id !== $lastMessageID))
 			);
 	}
 
