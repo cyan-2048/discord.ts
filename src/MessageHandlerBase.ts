@@ -45,13 +45,15 @@ async function graduallyPush(
 	gatewayInstance: DiscordGateway,
 	channelInstance: GuildChannel | DirectMessageChannel,
 	guildInstance?: Guild,
+	updateStateFunc?: null | (() => void),
 	push = true
 ) {
 	for (let i = 0; i < thingsToPush.length; i++) {
 		await sleep(MessageHandlerBase.gradualPushInterval);
 		const element = thingsToPush[i];
 		targetArray[push ? "push" : "unshift"](new messageType(element, gatewayInstance, channelInstance, guildInstance));
-		await sleep(0);
+		updateStateFunc?.();
+		await sleep(1);
 	}
 }
 
@@ -101,7 +103,7 @@ export default class MessageHandlerBase {
 					if (!messages.length) return;
 					messages.reverse();
 					if (MessageHandlerBase.gradualPush) {
-						await graduallyPush(messageType, this.messages, messages, gatewayInstance, channelInstance, guildInstance);
+						await graduallyPush(messageType, this.messages, messages, gatewayInstance, channelInstance, guildInstance, this.updateState);
 					} else {
 						this.messages.push(...mapMessages(messageType, messages, gatewayInstance, channelInstance, guildInstance));
 					}
@@ -219,7 +221,7 @@ export default class MessageHandlerBase {
 			const messages = await this.getMessages({ before: this.messages[0].id, limit });
 			if (!messages.length) return;
 			if (MessageHandlerBase.gradualPush) {
-				await graduallyPush(this.messageType, this.messages, messages, this.gatewayInstance, this.channelInstance, this.guildInstance, false);
+				await graduallyPush(this.messageType, this.messages, messages, this.gatewayInstance, this.channelInstance, this.guildInstance, null, false);
 			} else {
 				messages.reverse();
 				this.messages.unshift(...mapMessages(this.messageType, messages, this.gatewayInstance, this.channelInstance, this.guildInstance));

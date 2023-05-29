@@ -51,8 +51,7 @@ class GatewayBase extends EventEmitter {
 	private ws?: WebSocket;
 	private sequence_num: number | null = null;
 	private authenticated = false;
-	readonly streamURL =
-		"wss://gateway.discord.gg/?v=9&encoding=json&compress=zlib-stream";
+	readonly streamURL = "wss://gateway.discord.gg/?v=9&encoding=json&compress=zlib-stream";
 	// @ts-ignore
 	private pako = pako() as Pako;
 	private _inflate: any;
@@ -163,8 +162,7 @@ class GatewayBase extends EventEmitter {
 		ws.binaryType = "arraybuffer";
 
 		this._inflate.onEnd = (e: number) => {
-			if (e !== pako.Z_OK)
-				throw new Error(`zlib error, ${e}, ${this._inflate.strm.msg}`);
+			if (e !== pako.Z_OK) throw new Error(`zlib error, ${e}, ${this._inflate.strm.msg}`);
 
 			const chunks = this._inflate?.chunks as string[];
 
@@ -222,9 +220,7 @@ class GatewayWorker extends EventEmitter {
 
 export function workerScript() {
 	const importFunc = (func: Function) => `var ${func.name}=${func.toString()};`;
-	return `// GATEWAY\n${[pako, EventEmitter, GatewayBase]
-		.map(importFunc)
-		.join("\n")}(${startWorker.toString()})()`;
+	return `// GATEWAY\n${[pako, EventEmitter, GatewayBase].map(importFunc).join("\n")}(${startWorker.toString()})()`;
 }
 
 export class Gateway extends EventEmitter {
@@ -307,39 +303,29 @@ export default class DiscordGateway extends Gateway {
 	// private_channels = writable(null);
 	// user_guild_settings = writable(null);
 
-	private token: string | null = null;
+	#token: string | null = null;
 
-	private isReady = new Deferred();
+	#isReady = new Deferred();
 	xhr: Discord["xhr"];
 	user?: ReadyEvent["user"];
 	guilds?: Guilds;
 	private_channels?: DirectMessages;
 	users_cache = new Map<string, User>();
 
-	constructor(
-		{ debug = false, worker = true } = {},
-		private DiscordInstance: Discord
-	) {
+	constructor({ debug = false, worker = true } = {}, private DiscordInstance: Discord) {
 		super({ debug, worker });
 
 		this.xhr = DiscordInstance.xhr;
 
 		this.on("t:ready", (data: ReadyEvent) => {
 			// console.log(data);
-			const {
-				user_settings,
-				guilds,
-				private_channels,
-				read_state,
-				user_guild_settings,
-				user,
-			} = data;
+			const { user_settings, guilds, private_channels, read_state, user_guild_settings, user } = data;
 
 			this.user_settings = user_settings;
 			this.user = user;
 			this.read_state = new ReadStateHandler(read_state, this);
 			//console.log({ user_settings, private_channels, guilds, read_state, user_guild_settings });
-			this.isReady.resolve(undefined);
+			this.#isReady.resolve(undefined);
 			this.guilds = new Guilds(guilds, user_guild_settings, this);
 			this.private_channels = new DirectMessages(private_channels, this);
 		});
@@ -381,11 +367,11 @@ export default class DiscordGateway extends Gateway {
 	read_state?: ReadStateHandler;
 
 	async login(token: string) {
-		this.isReady = new Deferred();
+		this.#isReady = new Deferred();
 		await this.run("login", token);
 		await this.run("init");
-		this.token = token;
-		return this.isReady.promise;
+		this.#token = token;
+		return this.#isReady.promise;
 	}
 
 	async send(packet: any) {

@@ -11,12 +11,14 @@ export type XHROptions = {
 	responseType?: XMLHttpRequestResponseType;
 };
 
-function isJSON(object: any) {
+function isJSON<T = unknown>(object: T) {
 	const type = typeof object;
+
+	if (["number", "string", "boolean"].includes(type) || object === null) return true;
+	if (object === undefined) return false;
 	if (type === "object") {
 		return object.constructor === Object || object.constructor === Array;
 	}
-	return ["number", "string", "boolean"].includes(type);
 }
 
 function fullURL(path = "/") {
