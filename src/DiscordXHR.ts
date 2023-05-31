@@ -9,16 +9,22 @@ export type XHROptions = {
 	data?: object | XMLHttpRequestBodyInit;
 	response?: boolean;
 	responseType?: XMLHttpRequestResponseType;
+	onProgress?: (e: ProgressObject) => any | void;
 };
 
-function isJSON<T = unknown>(object: T) {
-	const type = typeof object;
+export interface ProgressObject {
+	hash?: string;
+	lengthComputable: boolean;
+	loaded: number;
+	total: number;
+}
 
-	if (["number", "string", "boolean"].includes(type) || object === null) return true;
-	if (object === undefined) return false;
+function isJSON(object: any) {
+	const type = typeof object;
 	if (type === "object") {
 		return object.constructor === Object || object.constructor === Array;
 	}
+	return ["number", "string", "boolean"].includes(type);
 }
 
 function fullURL(path = "/") {
@@ -36,16 +42,25 @@ function fullURL(path = "/") {
 }
 
 export default class DiscordXHR {
+	public get token(): string | undefined {
+		return this._token;
+	}
+	public set token(value: string | undefined) {
+		this._token = value;
+	}
 	_postProgress?: (e: ProgressEvent) => void;
 
-	constructor(public token?: string) {}
+	constructor(private _token?: string) {}
 
-	xhr(url: string, { method = "get", headers = {}, data, response = true, responseType = "json" }: XHROptions = {}): Promise<any> {
+	xhr(
+		url: string,
+		{ method = "get", headers = {}, data, response = true, responseType = "json", onProgress }: XHROptions = {}
+	): Promise<any> {
 		return new Promise((res, rej) => {
 			// @ts-ignore: kaios
 			const xhr = new XMLHttpRequest({ mozAnon: true, mozSystem: true });
 
-			if (method === "post") xhr.upload.onprogress = this._postProgress || null;
+			if (method === "post") xhr.upload.onprogress = onProgress || this._postProgress || null;
 			xhr.responseType = responseType;
 			xhr.open(method, fullURL(url), true);
 

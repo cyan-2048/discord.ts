@@ -3,7 +3,7 @@ export type Unsubscriber = () => void;
 export default class EventEmitter {
 	private _events = new Map<string, Set<Function>>();
 
-	on(event: string, listener: Function) {
+	on(event: string, listener: Function): void {
 		this._events.set(event, (this._events.get(event) || new Set()).add(listener));
 	}
 

@@ -176,19 +176,16 @@ function mergeArrayLikeSet<T>(array1: Array<T>, array2: Iterable<T>) {
 }
 
 export default class GuildChannels {
-	channels = new Map<string, GuildChannel>();
-	#bindedEvents: Unsubscriber[] = [];
+	private channels = new Map<string, GuildChannel>();
+	private bindedEvents: Unsubscriber[] = [];
 	siftedChannels: Readable<GuildChannel[]>;
 
-	readonly #guildSettings: UserGuildSetting[];
-	readonly #guildInstance: Guild;
-	readonly #gatewayInstance: DiscordGateway;
-
-	constructor(initialValue: RawChannel[], guildSettings: UserGuildSetting[], guildInstance: Guild, gatewayInstance: DiscordGateway) {
-		this.#guildSettings = guildSettings;
-		this.#guildInstance = guildInstance;
-		this.#gatewayInstance = gatewayInstance;
-
+	constructor(
+		initialValue: RawChannel[],
+		private readonly guildSettings: UserGuildSetting[],
+		private readonly guildInstance: Guild,
+		private readonly gatewayInstance: DiscordGateway
+	) {
 		initialValue.forEach((rawChannel) => this.add(rawChannel));
 
 		const shiftedChannels = [...this.channels.values()];
@@ -212,7 +209,7 @@ export default class GuildChannels {
 			};
 		});
 
-		this.#bindedEvents.push(
+		this.bindedEvents.push(
 			gatewayInstance.subscribe("t:channel_update", (d: RawChannel) => {
 				if (d.guild_id === guildInstance.id) {
 					this.update(d.id, d);
@@ -241,7 +238,7 @@ export default class GuildChannels {
 	add(channel: RawChannel) {
 		this.get(channel.id)
 			? this.update(channel.id, channel)
-			: this.channels.set(channel.id, new GuildChannel(channel, this.#guildSettings, this.#guildInstance, this.#gatewayInstance));
+			: this.channels.set(channel.id, new GuildChannel(channel, this.guildSettings, this.guildInstance, this.gatewayInstance));
 	}
 
 	get(id: string) {
@@ -253,6 +250,6 @@ export default class GuildChannels {
 	}
 
 	eject() {
-		this.#bindedEvents.forEach((e) => e());
+		this.bindedEvents.forEach((e) => e());
 	}
 }

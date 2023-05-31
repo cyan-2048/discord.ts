@@ -19,15 +19,14 @@ export class GuildMember {
 
 	isUsedProps = false;
 
-	readonly #guildInstance: Guild;
-	readonly #gatewayInstance: DiscordGateway;
-
-	constructor(public rawProfile: ServerProfile, guildInstance: Guild, gatewayInstance: DiscordGateway) {
-		this.#guildInstance = guildInstance;
-		this.#gatewayInstance = gatewayInstance;
-
+	constructor(
+		public rawProfile: ServerProfile,
+		private readonly guildInstance: Guild,
+		private readonly gatewayInstance: DiscordGateway
+	) {
 		this.id = rawProfile.user.id;
-		const setProps_default = (this.updateProps = (props) => void Object.assign(rawProfile, props));
+		const setProps_default = (this.updateProps = (props) =>
+			void Object.assign(rawProfile, props));
 
 		this.props = readable(rawProfile, (set) => {
 			this.updateProps = (props) => {
@@ -46,7 +45,9 @@ export class GuildMember {
 	 * returns the color of the username
 	 */
 	getColor() {
-		const role = this.#guildInstance.rawGuild.roles.find((o) => this.rawProfile.roles.includes(o.id) && o.color > 0);
+		const role = this.guildInstance.rawGuild.roles.find(
+			(o) => this.rawProfile.roles.includes(o.id) && o.color > 0
+		);
 		return role ? decimal2rgb(role.color) : null;
 	}
 }
@@ -64,83 +65,100 @@ interface GuildMemberRemoveEvent {
 }
 
 export default class GuildMembers {
-	#profiles = new Map<string, GuildMember>();
-	#bindedEvents: Unsubscriber[] = [];
+	private profiles = new Map<string, GuildMember>();
+	private bindedEvents: Unsubscriber[] = [];
 
-	readonly #guildInstance: Guild;
-	readonly #gatewayInstance: DiscordGateway;
-
-	constructor(initialValue: ServerProfile[], guildInstance: Guild, gatewayInstance: DiscordGateway) {
-		this.#guildInstance = guildInstance;
-		this.#gatewayInstance = gatewayInstance;
-
+	constructor(
+		initialValue: ServerProfile[],
+		private readonly guildInstance: Guild,
+		private readonly gatewayInstance: DiscordGateway
+	) {
 		initialValue.forEach((profile) => this.add(profile));
 
-		this.#bindedEvents.push(
-			gatewayInstance.subscribe("t:guild_members_chunk", (event: GuildMembersChunkEvent) => {
-				if (event.guild_id == guildInstance.id) {
-					event.members.forEach((profile) => {
-						this.add(profile);
-					});
+		this.bindedEvents.push(
+			gatewayInstance.subscribe(
+				"t:guild_members_chunk",
+				(event: GuildMembersChunkEvent) => {
+					if (event.guild_id == guildInstance.id) {
+						event.members.forEach((profile) => {
+							this.add(profile);
+						});
+					}
 				}
-			}),
-			gatewayInstance.subscribe("t:guild_member_update", (profile: ServerProfile) => {
-				if (profile.guild_id == guildInstance.id) {
-					this.update(profile.user.id, profile);
+			),
+			gatewayInstance.subscribe(
+				"t:guild_member_update",
+				(profile: ServerProfile) => {
+					if (profile.guild_id == guildInstance.id) {
+						this.update(profile.user.id, profile);
+					}
 				}
-			}),
-			gatewayInstance.subscribe("t:guild_member_remove", (event: GuildMemberRemoveEvent) => {
-				if (event.guild_id == guildInstance.id) {
-					this.#profiles.delete(event.user.id);
+			),
+			gatewayInstance.subscribe(
+				"t:guild_member_remove",
+				(event: GuildMemberRemoveEvent) => {
+					if (event.guild_id == guildInstance.id) {
+						this.profiles.delete(event.user.id);
+					}
 				}
-			}),
-			gatewayInstance.subscribe("t:guild_member_add", (event: ServerProfile) => {
-				if (event.guild_id == guildInstance.id) {
-					this.add(event);
+			),
+			gatewayInstance.subscribe(
+				"t:guild_member_add",
+				(event: ServerProfile) => {
+					if (event.guild_id == guildInstance.id) {
+						this.add(event);
+					}
 				}
-			})
+			)
 		);
 	}
 
 	update(id: string, props: Partial<ServerProfile>) {
-		if (props.user) this.#gatewayInstance.users_cache.set(id, props.user);
-		this.#profiles.get(id)?.updateProps(props);
+		if (props.user) this.gatewayInstance.users_cache.set(id, props.user);
+		this.profiles.get(id)?.updateProps(props);
 	}
 
-	#waiting = new Map();
+	private waiting = new Map();
 
 	add(profile: ServerProfile) {
 		const userID = profile.user.id,
-			gateway = this.#gatewayInstance;
+			gateway = this.gatewayInstance;
 		gateway.users_cache.set(userID, profile.user);
-		this.#profiles.get(userID) ? this.update(userID, profile) : this.#profiles.set(userID, new GuildMember(profile, this.#guildInstance, gateway));
+		this.profiles.get(userID)
+			? this.update(userID, profile)
+			: this.profiles.set(
+					userID,
+					new GuildMember(profile, this.guildInstance, gateway)
+			  );
 
-		const waited = this.#waiting.get(userID);
+		const waited = this.waiting.get(userID);
 		if (waited) {
 			// i am unsure if this is actually needed
 			// this.alreadySent.delete(userID);
-			waited.resolve(this.#profiles.get(userID));
-			this.#waiting.delete(userID);
+			waited.resolve(this.profiles.get(userID));
+			this.waiting.delete(userID);
 		}
 	}
 
-	#lastRequest = performance.now();
-	#alreadySent = new Set<string>();
+	private lastRequest = performance.now();
+	private alreadySent = new Set<string>();
 
-	#request() {
-		if (performance.now() - this.#lastRequest < 3000) return;
+	private request() {
+		if (performance.now() - this.lastRequest < 3000) return;
 
 		setTimeout(async () => {
-			this.#lastRequest = performance.now();
-			if (this.#waiting.size == 0) return;
-			const user_ids = [...this.#waiting.keys()].filter((id) => !this.#alreadySent.has(id));
+			this.lastRequest = performance.now();
+			if (this.waiting.size == 0) return;
+			const user_ids = [...this.waiting.keys()].filter(
+				(id) => !this.alreadySent.has(id)
+			);
 			if (user_ids.length == 0) return;
-			user_ids.forEach((a) => this.#alreadySent.add(a));
+			user_ids.forEach((a) => this.alreadySent.add(a));
 
-			this.#gatewayInstance.send({
+			this.gatewayInstance.send({
 				op: 8,
 				d: {
-					guild_id: [this.#guildInstance.id],
+					guild_id: [this.guildInstance.id],
 					query: undefined,
 					limit: undefined,
 					presences: true,
@@ -155,26 +173,26 @@ export default class GuildMembers {
 	 * @param userID
 	 */
 	lazy(userID: string): Promise<GuildMember> {
-		const member = this.#profiles.get(userID);
+		const member = this.profiles.get(userID);
 		if (member) return Promise.resolve(member);
 
-		const alreadyWaiting = this.#waiting.get(userID);
+		const alreadyWaiting = this.waiting.get(userID);
 		if (alreadyWaiting) return alreadyWaiting.promise;
 
 		const deferred = new Deferred<GuildMember>();
-		this.#waiting.set(userID, deferred);
-		this.#request();
+		this.waiting.set(userID, deferred);
+		this.request();
 
 		return deferred.promise;
 	}
 
 	get(id: string) {
-		const profile = this.#profiles.get(id);
+		const profile = this.profiles.get(id);
 		if (!profile) this.lazy(id);
 		return profile;
 	}
 
 	eject() {
-		this.#bindedEvents.forEach((e) => e());
+		this.bindedEvents.forEach((e) => e());
 	}
 }

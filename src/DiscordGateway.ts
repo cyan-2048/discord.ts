@@ -46,7 +46,7 @@ interface Pako {
 	Z_OK: number;
 }
 
-class GatewayBase extends EventEmitter {
+export class GatewayBase extends EventEmitter {
 	private token?: string;
 	private ws?: WebSocket;
 	private sequence_num: number | null = null;
@@ -72,38 +72,38 @@ class GatewayBase extends EventEmitter {
 		this.debug("send:", data);
 		this.ws?.send(JSON.stringify(data));
 	}
-	handlePacket(packet: GatewayEvent) {
+	#handlePacket(packet: GatewayEvent) {
 		this.debug("Handling packet with OP ", packet.op);
 
 		switch (packet.op) {
 			case 0:
-				this.packetDispatch(packet);
+				this.#packetDispatch(packet);
 				break;
 			case 9:
-				this.packetInvalidSess(packet);
+				this.#packetInvalidSess(packet);
 				break;
 			case 10:
-				this.packetHello(packet);
+				this.#packetHello(packet);
 				break;
 			case 11:
-				this.packetAck();
+				this.#packetAck();
 				break;
 			default:
 				this.debug("OP " + packet.op + "not found!");
 				break;
 		}
 	}
-	packetDispatch(packet: GatewayEvent) {
+	#packetDispatch(packet: GatewayEvent) {
 		this.sequence_num = packet.s;
 		this.debug("dispatch:", packet);
 		packet.t && this.emit("t:" + packet.t.toLowerCase(), packet.d);
 	}
-	packetInvalidSess(packet: GatewayEvent<false>) {
+	#packetInvalidSess(packet: GatewayEvent<false>) {
 		this.debug("sess inv:", packet);
 		this.close();
 	}
 
-	packetHello(
+	#packetHello(
 		packet: GatewayEvent<{
 			heartbeat_interval: number;
 		}>
@@ -122,7 +122,7 @@ class GatewayBase extends EventEmitter {
 		this.debug("heartbeat interval: ", packet.d.heartbeat_interval);
 	}
 
-	packetAck() {
+	#packetAck() {
 		if (this.authenticated) return;
 		this.authenticated = true;
 		this.send({
@@ -167,7 +167,7 @@ class GatewayBase extends EventEmitter {
 			const chunks = this._inflate?.chunks as string[];
 
 			const result = chunks.join("");
-			result && this.handlePacket(JSON.parse(result));
+			result && this.#handlePacket(JSON.parse(result));
 			chunks.length = 0;
 		};
 
@@ -188,61 +188,56 @@ class GatewayBase extends EventEmitter {
 	}
 }
 
-function startWorker() {
-	const gateway = new GatewayBase();
-	gateway.on("*", (evt: string, ...data: any[]) => {
-		self.postMessage({ evt, data });
-	});
-	self.onmessage = ({ data }) => {
-		if (data === "worker:debug") gateway._debug = true;
-		// @ts-ignore: not important
-		else gateway[data.evt](...data.data);
-	};
-	self.postMessage("worker:ready");
-}
-
-// console.log(`var ${EventEmitter.name}=${EventEmitter.toString()};var ${GatewayBase.name}=${GatewayBase.toString()};(${startWorker.toString()})()`);
-
-type RunCommands = "close" | "send" | "login" | "init";
+type RunCommands = GatewayAction[1]["method"];
 
 class GatewayWorker extends EventEmitter {
-	constructor(public worker: Worker) {
+	constructor(private worker: Worker, debug = false, ready?: () => void) {
 		super();
-		worker.onmessage = ({ data }) => {
-			if (data.evt && data.data) this.emit(data.evt, ...data.data);
-		};
+
+		worker.addEventListener("message", ({ data }: MessageEvent<WorkerResponse>) => {
+			if (typeof data == "string") {
+				if (data == "gatewayReady") ready?.();
+			} else {
+				const [evt, obj] = data;
+				if (evt != "gateway") return;
+				this.emit(obj.event, ...data);
+			}
+		});
+
+		debug && worker.postMessage("debug");
+		worker.postMessage("setupGateway");
 	}
 	run(command: RunCommands, ...args: any[]) {
-		if (command === "close") return this.worker.terminate();
-		this.worker.postMessage({ evt: command, data: args });
+		if (command == "close") {
+			return this.worker.terminate();
+		}
+		this.worker.postMessage(["gateway", { method: command, params: args }]);
 	}
 }
 
-export function workerScript() {
-	const importFunc = (func: Function) => `var ${func.name}=${func.toString()};`;
-	return `// GATEWAY\n${[pako, EventEmitter, GatewayBase].map(importFunc).join("\n")}(${startWorker.toString()})()`;
+interface GatewayProps {
+	debug?: boolean;
+	worker?: boolean;
+	instance: Discord;
 }
-
-export class Gateway extends EventEmitter {
+class Gateway extends EventEmitter {
 	static workerSrc: null | string = null;
-	private backend!: GatewayWorker | GatewayBase;
+	#backend!: GatewayWorker | GatewayBase;
 	private ready = Promise.resolve();
-	constructor({ debug = false, worker = true }) {
+	constructor({ worker = false, debug = false, instance }: GatewayProps) {
 		super();
 
-		if (worker && typeof Worker !== "undefined") {
-			(async () => {
-				this.backend = await this.setupWorker(debug);
-				this.forwardEvents();
-			})();
-			return;
-		} else this.backend = this.setupMainThread(debug);
+		if (worker && typeof Worker !== "undefined" && instance._worker) {
+			const deferred = new Deferred<void>();
+			this.ready = deferred.promise;
+			this.#backend = new GatewayWorker(instance._worker, debug, deferred.resolve);
+		} else this.#backend = new GatewayBase(debug);
 
 		this.forwardEvents();
 	}
 
 	forwardEvents() {
-		this.backend.on("*", (evt: string, ...data: any[]) => {
+		this.#backend.on("*", (evt: string, ...data: any[]) => {
 			this.emit(evt, ...data);
 		});
 	}
@@ -250,43 +245,8 @@ export class Gateway extends EventEmitter {
 	async run(command: RunCommands, ...args: any[]) {
 		await this.ready;
 		// @ts-ignore
-		if (this.backend instanceof GatewayBase) this.backend[command](...args);
-		else if ("run" in this.backend) this.backend.run(command, ...args);
-	}
-	setupMainThread(debug: boolean) {
-		return new GatewayBase(debug);
-	}
-	async setupWorker(debug: boolean) {
-		const deferred = new Deferred<void>();
-		this.ready = deferred.promise;
-
-		await sleep(100);
-
-		// @ts-ignore
-		const src = Gateway.workerSrc || window.__workerSrc;
-
-		const worker = new Worker(
-			src ||
-				URL.createObjectURL(
-					new Blob([workerScript()], {
-						type: "text/javascript",
-					})
-				)
-		);
-
-		worker.addEventListener("message", function e({ data }) {
-			if (data === "worker:ready") {
-				worker.removeEventListener("message", e);
-				debug && worker.postMessage("worker:debug");
-				deferred.resolve();
-			}
-		});
-
-		const base = new GatewayWorker(worker);
-
-		// base.on("close", () => worker.terminate());
-
-		return base;
+		if (this.#backend instanceof GatewayBase) this.#backend[command](...args);
+		else if ("run" in this.#backend) this.#backend.run(command, ...args);
 	}
 }
 
@@ -296,6 +256,7 @@ import Discord from "./main";
 import Guilds from "./Guilds";
 import DirectMessages, { DirectMessageChannel } from "./DirectMessages";
 import { GuildChannel } from "./GuildChannels";
+import { GatewayAction, WorkerResponse } from "./worker";
 
 export default class DiscordGateway extends Gateway {
 	// user_settings = writable(null);
@@ -303,9 +264,9 @@ export default class DiscordGateway extends Gateway {
 	// private_channels = writable(null);
 	// user_guild_settings = writable(null);
 
-	#token: string | null = null;
+	private token: string | null = null;
 
-	#isReady = new Deferred();
+	private isReady = new Deferred();
 	xhr: Discord["xhr"];
 	user?: ReadyEvent["user"];
 	guilds?: Guilds;
@@ -313,7 +274,7 @@ export default class DiscordGateway extends Gateway {
 	users_cache = new Map<string, User>();
 
 	constructor({ debug = false, worker = true } = {}, private DiscordInstance: Discord) {
-		super({ debug, worker });
+		super({ debug, worker, instance: DiscordInstance });
 
 		this.xhr = DiscordInstance.xhr;
 
@@ -325,7 +286,7 @@ export default class DiscordGateway extends Gateway {
 			this.user = user;
 			this.read_state = new ReadStateHandler(read_state, this);
 			//console.log({ user_settings, private_channels, guilds, read_state, user_guild_settings });
-			this.#isReady.resolve(undefined);
+			this.isReady.resolve(undefined);
 			this.guilds = new Guilds(guilds, user_guild_settings, this);
 			this.private_channels = new DirectMessages(private_channels, this);
 		});
@@ -367,11 +328,11 @@ export default class DiscordGateway extends Gateway {
 	read_state?: ReadStateHandler;
 
 	async login(token: string) {
-		this.#isReady = new Deferred();
+		this.isReady = new Deferred();
 		await this.run("login", token);
 		await this.run("init");
-		this.#token = token;
-		return this.#isReady.promise;
+		this.token = token;
+		return this.isReady.promise;
 	}
 
 	async send(packet: any) {
