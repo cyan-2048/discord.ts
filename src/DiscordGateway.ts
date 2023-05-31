@@ -200,7 +200,7 @@ class GatewayWorker extends EventEmitter {
 			} else {
 				const [evt, obj] = data;
 				if (evt != "gateway") return;
-				this.emit(obj.event, ...data);
+				this.emit(obj.event, ...obj.data);
 			}
 		});
 
