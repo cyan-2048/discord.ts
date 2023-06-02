@@ -1,4 +1,4 @@
-import { Readable, readable } from "svelte/store";
+import { Readable, readable } from "@stores";
 import { DirectMessage, DirectMessageChannel } from "./DirectMessages";
 import DiscordGateway from "./DiscordGateway";
 import { Unsubscriber } from "./EventEmitter";

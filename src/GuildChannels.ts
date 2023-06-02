@@ -1,7 +1,7 @@
 import { Channel as RawChannel, UserGuildSetting } from "./libs/types";
 import { Guild } from "./Guilds";
 import DiscordGateway from "./DiscordGateway";
-import { derived, readable, Readable, Writable, writable } from "svelte/store";
+import { derived, readable, Readable, Writable, writable } from "@stores";
 import { Unsubscriber } from "./EventEmitter";
 import { ReadStateListener } from "./ReadStateHandler";
 import MessageHandlerBase from "./MessageHandlerBase";

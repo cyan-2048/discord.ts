@@ -1,8 +1,7 @@
 {
 	"dependencies": {
 		"@types/pako": "^1.0.4",
-		"@types/web": "^0.0.88",
-		"svelte": "^3.56.0"
+		"@types/web": "^0.0.88"
 	},
 	"devDependencies": {
 		"esbuild": "^0.17.3",

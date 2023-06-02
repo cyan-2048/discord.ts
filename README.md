@@ -8,4 +8,4 @@ Attempt on making a library using TypeScript.
 - should work fine on nodejs
 - Object Oriented approach, basically a discord.js knockoff lmao
 - will try to be efficient as much as possible, will avoid making major changes
-- This library uses svelte/stores, so it's very useful for a discord client that is written in svelte.
+- This library uses the svelte stores spec.

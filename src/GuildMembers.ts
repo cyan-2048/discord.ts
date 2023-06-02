@@ -1,4 +1,4 @@
-import { readable, Readable } from "svelte/store";
+import { readable, Readable } from "@stores";
 import DiscordGateway from "./DiscordGateway";
 import { Guild } from "./Guilds";
 import type { ServerProfile, User } from "./libs/types";
@@ -19,14 +19,9 @@ export class GuildMember {
 
 	isUsedProps = false;
 
-	constructor(
-		public rawProfile: ServerProfile,
-		private readonly guildInstance: Guild,
-		private readonly gatewayInstance: DiscordGateway
-	) {
+	constructor(public rawProfile: ServerProfile, private readonly guildInstance: Guild, private readonly gatewayInstance: DiscordGateway) {
 		this.id = rawProfile.user.id;
-		const setProps_default = (this.updateProps = (props) =>
-			void Object.assign(rawProfile, props));
+		const setProps_default = (this.updateProps = (props) => void Object.assign(rawProfile, props));
 
 		this.props = readable(rawProfile, (set) => {
 			this.updateProps = (props) => {
@@ -45,9 +40,7 @@ export class GuildMember {
 	 * returns the color of the username
 	 */
 	getColor() {
-		const role = this.guildInstance.rawGuild.roles.find(
-			(o) => this.rawProfile.roles.includes(o.id) && o.color > 0
-		);
+		const role = this.guildInstance.rawGuild.roles.find((o) => this.rawProfile.roles.includes(o.id) && o.color > 0);
 		return role ? decimal2rgb(role.color) : null;
 	}
 }
@@ -68,48 +61,32 @@ export default class GuildMembers {
 	private profiles = new Map<string, GuildMember>();
 	private bindedEvents: Unsubscriber[] = [];
 
-	constructor(
-		initialValue: ServerProfile[],
-		private readonly guildInstance: Guild,
-		private readonly gatewayInstance: DiscordGateway
-	) {
+	constructor(initialValue: ServerProfile[], private readonly guildInstance: Guild, private readonly gatewayInstance: DiscordGateway) {
 		initialValue.forEach((profile) => this.add(profile));
 
 		this.bindedEvents.push(
-			gatewayInstance.subscribe(
-				"t:guild_members_chunk",
-				(event: GuildMembersChunkEvent) => {
-					if (event.guild_id == guildInstance.id) {
-						event.members.forEach((profile) => {
-							this.add(profile);
-						});
-					}
+			gatewayInstance.subscribe("t:guild_members_chunk", (event: GuildMembersChunkEvent) => {
+				if (event.guild_id == guildInstance.id) {
+					event.members.forEach((profile) => {
+						this.add(profile);
+					});
 				}
-			),
-			gatewayInstance.subscribe(
-				"t:guild_member_update",
-				(profile: ServerProfile) => {
-					if (profile.guild_id == guildInstance.id) {
-						this.update(profile.user.id, profile);
-					}
+			}),
+			gatewayInstance.subscribe("t:guild_member_update", (profile: ServerProfile) => {
+				if (profile.guild_id == guildInstance.id) {
+					this.update(profile.user.id, profile);
 				}
-			),
-			gatewayInstance.subscribe(
-				"t:guild_member_remove",
-				(event: GuildMemberRemoveEvent) => {
-					if (event.guild_id == guildInstance.id) {
-						this.profiles.delete(event.user.id);
-					}
+			}),
+			gatewayInstance.subscribe("t:guild_member_remove", (event: GuildMemberRemoveEvent) => {
+				if (event.guild_id == guildInstance.id) {
+					this.profiles.delete(event.user.id);
 				}
-			),
-			gatewayInstance.subscribe(
-				"t:guild_member_add",
-				(event: ServerProfile) => {
-					if (event.guild_id == guildInstance.id) {
-						this.add(event);
-					}
+			}),
+			gatewayInstance.subscribe("t:guild_member_add", (event: ServerProfile) => {
+				if (event.guild_id == guildInstance.id) {
+					this.add(event);
 				}
-			)
+			})
 		);
 	}
 
@@ -124,12 +101,7 @@ export default class GuildMembers {
 		const userID = profile.user.id,
 			gateway = this.gatewayInstance;
 		gateway.users_cache.set(userID, profile.user);
-		this.profiles.get(userID)
-			? this.update(userID, profile)
-			: this.profiles.set(
-					userID,
-					new GuildMember(profile, this.guildInstance, gateway)
-			  );
+		this.profiles.get(userID) ? this.update(userID, profile) : this.profiles.set(userID, new GuildMember(profile, this.guildInstance, gateway));
 
 		const waited = this.waiting.get(userID);
 		if (waited) {
@@ -149,9 +121,7 @@ export default class GuildMembers {
 		setTimeout(async () => {
 			this.lastRequest = performance.now();
 			if (this.waiting.size == 0) return;
-			const user_ids = [...this.waiting.keys()].filter(
-				(id) => !this.alreadySent.has(id)
-			);
+			const user_ids = [...this.waiting.keys()].filter((id) => !this.alreadySent.has(id));
 			if (user_ids.length == 0) return;
 			user_ids.forEach((a) => this.alreadySent.add(a));
 

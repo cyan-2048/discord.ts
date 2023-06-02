@@ -123,6 +123,6 @@ export default class Discord {
 }
 
 // fucking vite
-export type { Readable, Writable } from "svelte/store";
+export type { Readable, Writable } from "@stores";
 
-export { get, writable, readable, derived } from "svelte/store";
+export { get, writable, readable, derived } from "@stores";
